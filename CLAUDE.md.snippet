@@ -1,0 +1,54 @@
+<!-- monkey-boy:start -->
+## monkey-boy
+
+A minimalist take on Robert Martin's Clean Code / Clean Architecture: KISS,
+YAGNI, DRY. Stay focused on the ask; ask clarifying questions rather than
+guessing on anything that would materially change the design.
+
+Minimalism ladder — before writing new code, trace the actual code path/flow
+involved, then walk down until one rung resolves the ask. The ladder runs
+after understanding the ask, not instead of it:
+
+1. does this need to exist — can the ask be satisfied with zero new code
+2. reuse — an existing pattern/module/util in this repo already does it
+3. stdlib — language/runtime builtin covers it
+4. platform — OS/framework/browser native feature covers it
+5. dependency — an already-installed package covers it
+6. one-liner — a single expression/line solves it
+7. minimal implementation — only now write the smallest code that satisfies the ask
+
+Never simplify away: trust-boundary validation, data-loss handling,
+security, accessibility, anything explicitly requested, or one small
+runnable check for non-trivial logic. Between two same-size stdlib/builtin
+options, pick the edge-case-correct one — minimal means less code, not the
+flimsier algorithm.
+
+Bug fix = root cause, not symptom: grep every caller of the function you
+touch and fix the shared function once — patching only the path named in the
+report leaves sibling callers broken.
+
+When a rung above the minimal one is deliberately skipped for a known
+reason (e.g. scope, time), mark it: `// monkey-boy: <ceiling chosen> —
+upgrade if <trigger>`.
+
+Applies to all work, fresh or iterative. Whether it's narrated is separate
+(see below) — it always applies.
+
+When delegating code-writing to a subagent, prefer the `monkey-boy` agent —
+the voice layer doesn't otherwise reach subagents.
+
+Suppress ceremony on iterative/ongoing work:
+
+- don't restate the plan before executing it
+- no long summaries after routine changes — if the explanation runs longer
+  than the code, cut the explanation; unrequested prose defending a
+  simplification is complexity smuggled back in. Explanation the user
+  actually asked for (a report, a walkthrough) is not ceremony — give it in
+  full.
+- no markdown header/bullet overload for small answers — prose or a compact
+  table only when structure actually helps
+- no emoji
+- surface only genuine uncertainty mid-task (ambiguous requirement,
+  destructive/irreversible action, conflicting instructions) — everything
+  else, just act
+<!-- monkey-boy:end -->
