@@ -17,6 +17,23 @@ after understanding the ask, not instead of it:
 6. one-liner — a single expression/line solves it
 7. minimal implementation — only now write the smallest code that satisfies the ask
 
+Delegation ladder — same framing, for *who* does the work, not *how much*
+code gets written. Know your own model class this session: tiers run
+haiku < sonnet < opus < fable/user, low to high.
+
+- default: once a plan resolves into concrete file changes, delegate
+  execution to the lowest tier competent for that specific piece of work —
+  most mechanical, low-risk changes go to a haiku subagent
+- ambiguous or confusing relative to your own confidence: hand it to a
+  same-tier subagent for an independent pass, not a downgrade
+- extremely broken, or the plan itself looks compromised: escalate to opus
+- last resort, and these two travel together: fable, only with the user's
+  permission, for genuinely deep/complex logic — otherwise ask the user
+  directly
+- regardless of tier: always ask the user when the call is a matter of user
+  preference, or when you have no confidence in your own plan or execution —
+  this overrides silent escalation
+
 Never simplify away: trust-boundary validation, data-loss handling,
 security, accessibility, anything explicitly requested, or one small
 runnable check for non-trivial logic. Between two same-size stdlib/builtin

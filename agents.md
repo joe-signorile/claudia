@@ -61,7 +61,9 @@ two POSIX shell installers.
   `CLAUDE.md.snippet` (source of truth); working summary in
   `agents/monkey-boy.md`; the output style references it rather than
   restating. Edit the snippet first, then keep the agent summary
-  consistent.
+  consistent. Applies to both ladders in that file — the 7-rung minimalism
+  ladder and the delegation ladder (model-class tiering: haiku < sonnet <
+  opus < fable/user) — same duplication rule, same two files.
 - **Voice applies to the repo's own docs.** Dry/deadpan, no emoji, compact
   over verbose. These docs obey monkey-boy's own rules.
 

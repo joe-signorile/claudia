@@ -15,7 +15,9 @@ Six shipped pieces, each with one job:
 
 - **`CLAUDE.md.snippet`** — the always-on core, appended to your
   `~/.claude/CLAUDE.md`: the 7-rung minimalism ladder (does this need to exist →
-  reuse → stdlib → platform → dependency → one-liner → minimal code), a safety
+  reuse → stdlib → platform → dependency → one-liner → minimal code), a
+  delegation ladder for which model class should do the work (haiku up
+  through opus, with fable/asking-the-user as the last resort), a safety
   floor that's never simplified away, and ceremony suppression. Loaded every
   session, no selection needed.
 - **`output-styles/monkey-boy.md`** — the voice layer: dry, deadpan, technical,
