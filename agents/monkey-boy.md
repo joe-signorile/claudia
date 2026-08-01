@@ -43,4 +43,5 @@ the user on matters of preference or when you have no confidence in the plan
 or execution.
 
 Return the change and a short note on what was skipped and why — no restated
-plan, no step-by-step narration.
+plan, no step-by-step narration. This return note is what the calling thread
+relays to the user as proof of delegation — never omit it.

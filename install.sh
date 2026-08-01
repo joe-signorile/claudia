@@ -18,16 +18,20 @@ trap 'rm -f "$CANDIDATES_FILE" "$SELECTED_FILE"' EXIT
 
 select_dirs "Install into"
 
-# Copy src -> dest, backing up an existing dest that differs to dest.bak.
-backup_and_copy() {
+# Symlink dest -> src, backing up a pre-existing non-symlink dest once.
+link_and_backup() {
   src="$1"; dest="$2"
-  # Back up a differing existing dest, but only once: don't clobber a backup
-  # from an earlier install with a copy of our own file on re-runs.
-  if [ -f "$dest" ] && ! cmp -s "$src" "$dest" && [ ! -f "$dest.bak" ]; then
-    cp "$dest" "$dest.bak"
-    echo "Backed up existing $dest -> $dest.bak"
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
+    return 0
   fi
-  cp "$src" "$dest"
+  if [ -e "$dest" ] && [ ! -L "$dest" ] && [ ! -f "$dest.bak" ]; then
+    mv "$dest" "$dest.bak"
+    echo "Backed up existing $dest -> $dest.bak"
+  else
+    rm -f "$dest"
+  fi
+  ln -s "$src" "$dest"
+  echo "Linked $dest -> $src"
 }
 
 set_output_style() {
@@ -63,24 +67,32 @@ install_one() {
     "$CLAUDE_DIR/skills/monkey-boy-debt" "$CLAUDE_DIR/skills/doc-router" \
     "$CLAUDE_DIR/agents"
 
-  backup_and_copy "$REPO_DIR/output-styles/monkey-boy.md" "$CLAUDE_DIR/output-styles/monkey-boy.md"
-  backup_and_copy "$REPO_DIR/skills/fresh-work/SKILL.md" "$CLAUDE_DIR/skills/fresh-work/SKILL.md"
-  backup_and_copy "$REPO_DIR/skills/monkey-boy-debt/SKILL.md" "$CLAUDE_DIR/skills/monkey-boy-debt/SKILL.md"
-  backup_and_copy "$REPO_DIR/skills/doc-router/SKILL.md" "$CLAUDE_DIR/skills/doc-router/SKILL.md"
-  backup_and_copy "$REPO_DIR/agents/monkey-boy.md" "$CLAUDE_DIR/agents/monkey-boy.md"
+  link_and_backup "$REPO_DIR/output-styles/monkey-boy.md" "$CLAUDE_DIR/output-styles/monkey-boy.md"
+  link_and_backup "$REPO_DIR/skills/fresh-work/SKILL.md" "$CLAUDE_DIR/skills/fresh-work/SKILL.md"
+  link_and_backup "$REPO_DIR/skills/monkey-boy-debt/SKILL.md" "$CLAUDE_DIR/skills/monkey-boy-debt/SKILL.md"
+  link_and_backup "$REPO_DIR/skills/doc-router/SKILL.md" "$CLAUDE_DIR/skills/doc-router/SKILL.md"
+  link_and_backup "$REPO_DIR/agents/monkey-boy.md" "$CLAUDE_DIR/agents/monkey-boy.md"
 
+  # CLAUDE.md can't be symlinked whole (it holds the user's own content too),
+  # so the fenced block holds a single @import line instead of a pasted copy.
   CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
   touch "$CLAUDE_MD"
-  if ! grep -qF "$MARKER_START" "$CLAUDE_MD" && ! grep -qF "$MARKER_END" "$CLAUDE_MD"; then
-    printf '\n' >> "$CLAUDE_MD"
-    cat "$REPO_DIR/CLAUDE.md.snippet" >> "$CLAUDE_MD"
-    echo "Appended monkey-boy block to $CLAUDE_MD"
+  IMPORT_LINE="@$REPO_DIR/CLAUDE.md.snippet"
+  if grep -qF "$MARKER_START" "$CLAUDE_MD" && grep -qF "$MARKER_END" "$CLAUDE_MD"; then
+    awk -v s="$MARKER_START" -v e="$MARKER_END" -v imp="$IMPORT_LINE" '
+      index($0, s) { print; print imp; skip = 1; next }
+      skip && index($0, e) { print; skip = 0; next }
+      skip { next }
+      { print }
+    ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
+    echo "monkey-boy block in $CLAUDE_MD now @imports the repo"
   else
-    echo "monkey-boy block already present in $CLAUDE_MD, skipping"
+    printf '\n%s\n%s\n%s\n' "$MARKER_START" "$IMPORT_LINE" "$MARKER_END" >> "$CLAUDE_MD"
+    echo "Appended monkey-boy @import block to $CLAUDE_MD"
   fi
 
-  echo "Installed output-style, fresh-work + monkey-boy-debt + doc-router"
-  echo "skills, and the monkey-boy agent."
+  echo "Linked output-style, fresh-work + monkey-boy-debt + doc-router"
+  echo "skills, and the monkey-boy agent straight to the repo."
 
   do_set=0
   if [ "$FORCE_OUTPUT_STYLE" = "1" ]; then

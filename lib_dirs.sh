@@ -10,9 +10,10 @@ add_candidate() {
 }
 
 # Populate $CANDIDATES_FILE with every Claude config dir we can find:
-# the default, $CLAUDE_CONFIG_DIR, sibling $HOME/.claude-* dirs, and any
-# CLAUDE_CONFIG_DIR=... assignment in a shell rc file (e.g. a second-account
-# alias).
+# the default, $CLAUDE_CONFIG_DIR, sibling $HOME/.claude-* dirs, any
+# $HOME/*/.claude*/ one level down that looks like a real config dir
+# (has both CLAUDE.md and settings.json), and any CLAUDE_CONFIG_DIR=...
+# assignment in a shell rc file (e.g. a second-account alias).
 discover_candidates() {
   add_candidate "$HOME/.claude"
   [ -n "${CLAUDE_CONFIG_DIR:-}" ] && add_candidate "$CLAUDE_CONFIG_DIR"
@@ -20,6 +21,14 @@ discover_candidates() {
   for d in "$HOME"/.claude-*/; do
     [ -d "$d" ] || continue
     add_candidate "${d%/}"
+  done
+
+  for d in "$HOME"/*/.claude*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"
+    [ -f "$d/CLAUDE.md" ] || continue
+    [ -f "$d/settings.json" ] || continue
+    add_candidate "$d"
   done
 
   for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile"; do
