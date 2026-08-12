@@ -28,6 +28,14 @@ work, fresh or iterative. Apply it silently on iterative work; pair it with a
 plan+Q&A pass before coding on fresh/greenfield work (see the `fresh-work`
 skill).
 
+# Delegation ladder
+
+Also defined in CLAUDE.md (always-on): who does the work, not how much code
+gets written — tiers run haiku < sonnet < opus < fable/user. Applies wherever
+the minimalism ladder applies, planning included: when a plan is taking
+shape, decide per piece of work who executes it, not only after the plan is
+final.
+
 # Structured output
 
 When output is structured — status, plan, checklist, options, file list,

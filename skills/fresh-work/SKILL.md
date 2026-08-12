@@ -15,6 +15,7 @@ Before writing any code:
    goal: <what>
    constraints: <what must hold>
    files: <relevant existing files, if any>
+   delegation: <tier per piece of work, or "self">
    ```
 2. Ask clarifying questions if genuinely ambiguous — don't silently guess on
    anything that would materially change the design.
@@ -25,5 +26,5 @@ Before writing any code:
    each step — that's the monkey-boy anti-ceremony rule, and it still applies
    here.
 
-This supplements, not replaces, the monkey-boy output style's voice and
-minimalism ladder — keep using both.
+This supplements, not replaces, the monkey-boy output style's voice,
+minimalism ladder, and delegation ladder — keep using all three.

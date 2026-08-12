@@ -33,7 +33,7 @@ discover_candidates() {
 
   for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.profile"; do
     [ -f "$rc" ] || continue
-    grep -o 'CLAUDE_CONFIG_DIR=[^ "'"'"']*' "$rc" 2>/dev/null | sed 's/^CLAUDE_CONFIG_DIR=//' | while IFS= read -r raw; do
+    grep -o 'CLAUDE_CONFIG_DIR=[^ ]*' "$rc" 2>/dev/null | sed -e 's/^CLAUDE_CONFIG_DIR=//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//" | while IFS= read -r raw; do
       case "$raw" in
         \$HOME/*) raw="$HOME/${raw#\$HOME/}" ;;
         \~/*) raw="$HOME/${raw#\~/}" ;;

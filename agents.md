@@ -73,7 +73,19 @@ two POSIX shell installers.
   restating. Edit the snippet first, then keep the agent summary
   consistent. Applies to both ladders in that file — the 7-rung minimalism
   ladder and the delegation ladder (model-class tiering: haiku < sonnet <
-  opus < fable/user) — same duplication rule, same two files.
+  opus < fable/user) — same duplication rule, same two files. The output
+  style (`output-styles/monkey-boy.md`) must reference *both* ladders, not
+  just minimalism — it's the artifact active every session, so a ladder
+  missing from it effectively doesn't apply during planning even though the
+  full text is sitting in CLAUDE.md context.
+- **`keep-coding-instructions: true` is a binary switch, not selective.**
+  Setting it keeps Claude Code's entire default system prompt (Doing tasks,
+  Tone and style, etc.) and appends the output style after it; there's no
+  way to keep the engineering-discipline instructions while dropping just
+  the default Tone-and-style section. So the default tone guidance and
+  monkey-boy's terse voice both sit in context at once — that's expected,
+  not a bug. The terseness payoff is in response length, not system-prompt
+  size (which is fixed/cached regardless of output style).
 - **Voice applies to the repo's own docs.** Dry/deadpan, no emoji, compact
   over verbose. These docs obey monkey-boy's own rules.
 
