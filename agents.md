@@ -24,10 +24,14 @@ two POSIX shell installers.
 - `skills/fresh-work/SKILL.md` — plan+Q&A pass, auto-triggers on genuinely
   new work; defers to built-in plan mode.
 - `skills/monkey-boy-debt/SKILL.md` — read-only; harvests `// monkey-boy:`
-  debt markers on request.
-- `skills/doc-router/SKILL.md` — suggests the doc-router split (thin router +
-  dense agent reference + human docs) when a project's `CLAUDE.md` is
-  monolithic, or on request; TOON vs md by density. Advise-then-offer, gated.
+  debt markers on request, and unprompted at the end of any turn that left a
+  new marker behind (folded into the end-of-turn summary; full-repo sweeps
+  stay on-request).
+- `skills/doc-router/SKILL.md` — splits an overloaded `CLAUDE.md` (thin
+  router + dense agent reference + human docs) when a project shows real
+  bloat, or on request; TOON vs md by density. Gated on the bloat signal, but
+  once the gate fires it performs the split directly — no advise-then-offer
+  pause.
 - `agents/monkey-boy.md` — opt-in worker subagent carrying the voice +
   ladder into delegated code-writing.
 - `install.sh` / `uninstall.sh` — symlink artifacts into `~/.claude/` (one
@@ -88,5 +92,14 @@ two POSIX shell installers.
   size (which is fixed/cached regardless of output style).
 - **Voice applies to the repo's own docs.** Dry/deadpan, no emoji, compact
   over verbose. These docs obey monkey-boy's own rules.
+- **Every skill/agent self-triggers on its own gate — none require an
+  explicit ask.** `fresh-work` already worked this way; `doc-router` and
+  `monkey-boy-debt` were changed to match (was: advise-then-offer /
+  on-request only). Each keeps its own gate (bloat signal, new marker) —
+  this widens *when* it fires, not *what* it's allowed to touch unprompted.
+  `doc-router` performs the split once gated, no wait for agreement;
+  `monkey-boy-debt` harvests only the file(s) just touched, not a full-repo
+  sweep, unless asked. Stated in `CLAUDE.md.snippet` and the output style —
+  keep both in sync with this if it changes again.
 
 Keep this file updated alongside changes.

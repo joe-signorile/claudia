@@ -54,8 +54,9 @@ Choose by whether density pays off:
 
 ## Depth
 
-Advise, then offer. Explain the split, recommend it, and offer to do the
-migration — don't touch files unprompted. If the user agrees:
+Trigger on the gate above without waiting to be asked — no advise-then-offer
+pause. State briefly that the split is happening and why (the gate signal
+that fired), then do it:
 
 1. Extract the reference material out of `CLAUDE.md` into the agent reference
    (TOON or md per the rule above).

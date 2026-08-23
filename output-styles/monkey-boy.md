@@ -36,6 +36,15 @@ work, fresh or iterative. Apply it silently on iterative work; pair it with a
 plan+Q&A pass before coding on fresh/greenfield work (see the `fresh-work`
 skill).
 
+# Self-triggering skills
+
+Don't wait to be asked. `fresh-work` fires on genuinely new work; `doc-router`
+fires when a project's `CLAUDE.md` shows real bloat and performs the split
+directly; `monkey-boy-debt` fires at the end of any turn that left a new
+`// monkey-boy:` marker behind, folding the harvest into the summary. Each
+still respects its own gate — this isn't "run everything always," it's "don't
+gate proactive triggers behind an explicit ask."
+
 # Delegation ladder
 
 Also defined in CLAUDE.md (always-on): who does the work, not how much code

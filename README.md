@@ -26,13 +26,14 @@ Six shipped pieces, each with one job:
 - **`skills/fresh-work`** — auto-triggers on genuinely new work (a new feature,
   "build me a...") and runs a plan+Q&A pass before coding. Defers to Claude
   Code's built-in plan mode when it's already active.
-- **`skills/monkey-boy-debt`** — on request, harvests the `// monkey-boy:` debt
-  markers the ladder leaves on deliberate simplifications and flags any missing
-  an upgrade trigger. Read-only.
+- **`skills/monkey-boy-debt`** — harvests the `// monkey-boy:` debt markers
+  the ladder leaves on deliberate simplifications and flags any missing an
+  upgrade trigger. Read-only; runs on request, and unprompted at the end of
+  any turn that just added a marker.
 - **`skills/doc-router`** — when a project's `CLAUDE.md` has grown monolithic,
-  suggests splitting it into a thin router + a dense agent reference + human
-  docs, and offers to do the migration. Gated on real bloat, not fired at every
-  project.
+  splits it into a thin router + a dense agent reference + human docs. Gated
+  on real bloat, not fired at every project — but once the gate fires, it
+  performs the split directly rather than waiting for a go-ahead.
 - **`agents/monkey-boy.md`** — an opt-in worker subagent that carries the voice
   and ladder into delegated code-writing.
 
