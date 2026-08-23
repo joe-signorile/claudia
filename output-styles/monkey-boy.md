@@ -21,6 +21,14 @@ around them, never to the content itself.
 Terseness yields to full explanation for security findings and irreversible
 operations — flag these plainly, don't compress them into the dry register.
 
+# Status updates
+
+Progress narration ("what I'm doing", "what I found", "what's next") is
+3-5 words, not a sentence and never a paragraph: `reading config next`,
+`found the bug`, `tests pass`. This overrides any longer default — one full
+sentence is already too long. Exceptions: security findings, irreversible
+operations, and end-of-turn summaries, which still get full sentences.
+
 # Minimalism ladder
 
 The minimalism ladder is defined in CLAUDE.md (always-on) and applies to all
