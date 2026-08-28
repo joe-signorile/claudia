@@ -1,12 +1,12 @@
 #!/bin/sh
-# Installs monkey-boy into one or more Claude Code config dirs. Safe to re-run.
+# Installs claudia into one or more Claude Code config dirs. Safe to re-run.
 # Pass --set-output-style to write outputStyle into settings.json
 # non-interactively (skips the per-install prompt) for every selected dir.
 set -eu
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-MARKER_START="<!-- monkey-boy:start -->"
-MARKER_END="<!-- monkey-boy:end -->"
+MARKER_START="<!-- claudia:start -->"
+MARKER_END="<!-- claudia:end -->"
 FORCE_OUTPUT_STYLE=0
 [ "${1:-}" = "--set-output-style" ] && FORCE_OUTPUT_STYLE=1
 
@@ -45,15 +45,15 @@ try:
     data = json.loads(text) if text.strip() else {}
 except json.JSONDecodeError as e:
     sys.stderr.write(f"{path} is not valid JSON ({e}); leaving it untouched.\n")
-    sys.stderr.write("Set Output style -> monkey-boy via /config instead.\n")
+    sys.stderr.write("Set Output style -> claudia via /config instead.\n")
     sys.exit(1)
-data["outputStyle"] = "monkey-boy"
+data["outputStyle"] = "claudia"
 path.write_text(json.dumps(data, indent=2) + "\n")
 PY
-    echo "Set outputStyle: monkey-boy in $settings"
+    echo "Set outputStyle: claudia in $settings"
   else
     echo "python3 not found, can't set outputStyle non-interactively." >&2
-    echo "Run /config in Claude Code and select Output style -> monkey-boy instead." >&2
+    echo "Run /config in Claude Code and select Output style -> claudia instead." >&2
     return 1
   fi
 }
@@ -64,14 +64,14 @@ install_one() {
   echo "== $CLAUDE_DIR =="
 
   mkdir -p "$CLAUDE_DIR/output-styles" "$CLAUDE_DIR/skills/fresh-work" \
-    "$CLAUDE_DIR/skills/monkey-boy-debt" "$CLAUDE_DIR/skills/doc-router" \
+    "$CLAUDE_DIR/skills/claudia-debt" "$CLAUDE_DIR/skills/doc-router" \
     "$CLAUDE_DIR/agents"
 
-  link_and_backup "$REPO_DIR/output-styles/monkey-boy.md" "$CLAUDE_DIR/output-styles/monkey-boy.md"
+  link_and_backup "$REPO_DIR/output-styles/claudia.md" "$CLAUDE_DIR/output-styles/claudia.md"
   link_and_backup "$REPO_DIR/skills/fresh-work/SKILL.md" "$CLAUDE_DIR/skills/fresh-work/SKILL.md"
-  link_and_backup "$REPO_DIR/skills/monkey-boy-debt/SKILL.md" "$CLAUDE_DIR/skills/monkey-boy-debt/SKILL.md"
+  link_and_backup "$REPO_DIR/skills/claudia-debt/SKILL.md" "$CLAUDE_DIR/skills/claudia-debt/SKILL.md"
   link_and_backup "$REPO_DIR/skills/doc-router/SKILL.md" "$CLAUDE_DIR/skills/doc-router/SKILL.md"
-  link_and_backup "$REPO_DIR/agents/monkey-boy.md" "$CLAUDE_DIR/agents/monkey-boy.md"
+  link_and_backup "$REPO_DIR/agents/claudia.md" "$CLAUDE_DIR/agents/claudia.md"
 
   # CLAUDE.md can't be symlinked whole (it holds the user's own content too),
   # so the fenced block holds a single @import line instead of a pasted copy.
@@ -85,20 +85,20 @@ install_one() {
       skip { next }
       { print }
     ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
-    echo "monkey-boy block in $CLAUDE_MD now @imports the repo"
+    echo "claudia block in $CLAUDE_MD now @imports the repo"
   else
     printf '\n%s\n%s\n%s\n' "$MARKER_START" "$IMPORT_LINE" "$MARKER_END" >> "$CLAUDE_MD"
-    echo "Appended monkey-boy @import block to $CLAUDE_MD"
+    echo "Appended claudia @import block to $CLAUDE_MD"
   fi
 
-  echo "Linked output-style, fresh-work + monkey-boy-debt + doc-router"
-  echo "skills, and the monkey-boy agent straight to the repo."
+  echo "Linked output-style, fresh-work + claudia-debt + doc-router"
+  echo "skills, and the claudia agent straight to the repo."
 
   do_set=0
   if [ "$FORCE_OUTPUT_STYLE" = "1" ]; then
     do_set=1
   elif [ -t 0 ]; then
-    printf "Set Output style -> monkey-boy in %s/settings.json now? [y/N]: " "$CLAUDE_DIR"
+    printf "Set Output style -> claudia in %s/settings.json now? [y/N]: " "$CLAUDE_DIR"
     read -r ans
     case "$ans" in y|Y|yes|YES) do_set=1 ;; esac
   fi
@@ -107,7 +107,7 @@ install_one() {
     set_output_style "$CLAUDE_DIR"
   else
     echo "To activate the voice/ladder, run /config in Claude Code (with"
-    echo "CLAUDE_CONFIG_DIR=$CLAUDE_DIR if applicable) and select Output style -> monkey-boy."
+    echo "CLAUDE_CONFIG_DIR=$CLAUDE_DIR if applicable) and select Output style -> claudia."
   fi
 }
 

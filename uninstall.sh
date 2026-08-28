@@ -1,11 +1,11 @@
 #!/bin/sh
-# Removes monkey-boy from one or more Claude Code config dirs. Safe to re-run.
+# Removes claudia from one or more Claude Code config dirs. Safe to re-run.
 # Leaves settings.json (outputStyle) untouched — change that via /config.
 set -eu
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-MARKER_START="<!-- monkey-boy:start -->"
-MARKER_END="<!-- monkey-boy:end -->"
+MARKER_START="<!-- claudia:start -->"
+MARKER_END="<!-- claudia:end -->"
 
 . "$REPO_DIR/lib_dirs.sh"
 
@@ -31,13 +31,13 @@ uninstall_one() {
   echo ""
   echo "== $CLAUDE_DIR =="
 
-  remove_and_restore "$CLAUDE_DIR/output-styles/monkey-boy.md"
+  remove_and_restore "$CLAUDE_DIR/output-styles/claudia.md"
   remove_and_restore "$CLAUDE_DIR/skills/fresh-work/SKILL.md"
-  remove_and_restore "$CLAUDE_DIR/skills/monkey-boy-debt/SKILL.md"
+  remove_and_restore "$CLAUDE_DIR/skills/claudia-debt/SKILL.md"
   remove_and_restore "$CLAUDE_DIR/skills/doc-router/SKILL.md"
-  remove_and_restore "$CLAUDE_DIR/agents/monkey-boy.md"
+  remove_and_restore "$CLAUDE_DIR/agents/claudia.md"
   rmdir "$CLAUDE_DIR/skills/fresh-work" 2>/dev/null || true
-  rmdir "$CLAUDE_DIR/skills/monkey-boy-debt" 2>/dev/null || true
+  rmdir "$CLAUDE_DIR/skills/claudia-debt" 2>/dev/null || true
   rmdir "$CLAUDE_DIR/skills/doc-router" 2>/dev/null || true
 
   CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
@@ -52,10 +52,10 @@ uninstall_one() {
       { for (i = 1; i <= n; i++) print buf[i]; n = 0; print }
       END { for (i = 1; i <= n; i++) print buf[i] }
     ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
-    echo "Removed monkey-boy block from $CLAUDE_MD"
+    echo "Removed claudia block from $CLAUDE_MD"
   fi
 
-  echo "Uninstalled monkey-boy files from $CLAUDE_DIR."
+  echo "Uninstalled claudia files from $CLAUDE_DIR."
 }
 
 while IFS= read -r dir; do
@@ -63,4 +63,4 @@ while IFS= read -r dir; do
 done < "$SELECTED_FILE"
 
 echo ""
-echo "If outputStyle is still set to monkey-boy in settings.json, change it via /config."
+echo "If outputStyle is still set to claudia in settings.json, change it via /config."

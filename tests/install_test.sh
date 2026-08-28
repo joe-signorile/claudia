@@ -25,15 +25,15 @@ run_install() {
 echo "== test: single account (no other .claude* dirs) installs directly =="
 mkdir -p "$SANDBOX/.claude"
 run_install < /dev/null > /dev/null
-assert_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
-assert_file "$SANDBOX/.claude/agents/monkey-boy.md"
+assert_file "$SANDBOX/.claude/output-styles/claudia.md"
+assert_file "$SANDBOX/.claude/agents/claudia.md"
 rm -rf "$SANDBOX/.claude"
 
 echo "== test: multiple accounts + non-interactive installs default only =="
 mkdir -p "$SANDBOX/.claude" "$SANDBOX/.claude-work"
 run_install < /dev/null > /dev/null
-assert_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
-assert_no_file "$SANDBOX/.claude-work/output-styles/monkey-boy.md"
+assert_file "$SANDBOX/.claude/output-styles/claudia.md"
+assert_no_file "$SANDBOX/.claude-work/output-styles/claudia.md"
 assert_no_file "$SANDBOX/.claude-work/CLAUDE.md"
 rm -rf "$SANDBOX/.claude" "$SANDBOX/.claude-work"
 
@@ -41,7 +41,7 @@ echo "== test: --set-output-style writes outputStyle non-interactively =="
 mkdir -p "$SANDBOX/.claude"
 echo '{}' > "$SANDBOX/.claude/settings.json"
 run_install --set-output-style < /dev/null > /dev/null
-grep -q '"outputStyle": "monkey-boy"' "$SANDBOX/.claude/settings.json" \
+grep -q '"outputStyle": "claudia"' "$SANDBOX/.claude/settings.json" \
   || { echo "FAIL: outputStyle not set"; FAIL=1; }
 rm -rf "$SANDBOX/.claude"
 

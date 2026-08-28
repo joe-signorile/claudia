@@ -55,7 +55,7 @@ Choose by whether density pays off:
   far denser than prose. Name the format and point the user at it; don't inline
   a full spec here.
 - **Markdown** when the project is small or doc-only — density gains are
-  marginal and md is more maintainable. monkey-boy applied this same rule to
+  marginal and md is more maintainable. claudia applied this same rule to
   its own repo and chose md.
 
 ## Depth

@@ -23,8 +23,8 @@ Before writing any code:
    duplicate the ceremony. This skill exists for fresh work requested outside
    of an explicit plan-mode session.
 4. Once scope is confirmed, execute. Don't re-restate the plan or narrate
-   each step — that's the monkey-boy anti-ceremony rule, and it still applies
+   each step — that's the claudia anti-ceremony rule, and it still applies
    here.
 
-This supplements, not replaces, the monkey-boy output style's voice,
+This supplements, not replaces, the claudia output style's voice,
 minimalism ladder, and delegation ladder — keep using all three.

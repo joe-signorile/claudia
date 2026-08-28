@@ -28,14 +28,14 @@ echo "== test: single account uninstall removes files and restores .bak =="
 mkdir -p "$SANDBOX/.claude"
 printf 'pre-existing content\n' > "$SANDBOX/.claude/CLAUDE.md"
 run_install < /dev/null > /dev/null
-assert_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
+assert_file "$SANDBOX/.claude/output-styles/claudia.md"
 run_uninstall < /dev/null > /dev/null
-assert_no_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
-assert_no_file "$SANDBOX/.claude/agents/monkey-boy.md"
+assert_no_file "$SANDBOX/.claude/output-styles/claudia.md"
+assert_no_file "$SANDBOX/.claude/agents/claudia.md"
 grep -q "pre-existing content" "$SANDBOX/.claude/CLAUDE.md" \
   || { echo "FAIL: original CLAUDE.md content lost"; FAIL=1; }
-grep -q "monkey-boy:start" "$SANDBOX/.claude/CLAUDE.md" \
-  && { echo "FAIL: monkey-boy block still present after uninstall"; FAIL=1; }
+grep -q "claudia:start" "$SANDBOX/.claude/CLAUDE.md" \
+  && { echo "FAIL: claudia block still present after uninstall"; FAIL=1; }
 rm -rf "$SANDBOX/.claude"
 
 echo "== test: multiple accounts + non-interactive uninstalls default only =="
@@ -45,12 +45,12 @@ mkdir -p "$SANDBOX/.claude" "$SANDBOX/.claude-work"
 run_install < /dev/null > /dev/null
 env -i HOME="$SANDBOX" PATH="$PATH" CLAUDE_CONFIG_DIR="$SANDBOX/.claude-work" \
   sh "$REPO_DIR/install.sh" < /dev/null > /dev/null
-assert_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
-assert_file "$SANDBOX/.claude-work/output-styles/monkey-boy.md"
+assert_file "$SANDBOX/.claude/output-styles/claudia.md"
+assert_file "$SANDBOX/.claude-work/output-styles/claudia.md"
 
 run_uninstall < /dev/null > /dev/null
-assert_no_file "$SANDBOX/.claude/output-styles/monkey-boy.md"
-assert_file "$SANDBOX/.claude-work/output-styles/monkey-boy.md"
+assert_no_file "$SANDBOX/.claude/output-styles/claudia.md"
+assert_file "$SANDBOX/.claude-work/output-styles/claudia.md"
 rm -rf "$SANDBOX/.claude" "$SANDBOX/.claude-work"
 
 if [ "$FAIL" = "0" ]; then

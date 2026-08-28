@@ -1,6 +1,6 @@
-# monkey-boy
+# claudia
 
-<img src="mb.webp" width="80" height="80" alt="monkey-boy" align="left">
+<img src="claudia.webp" width="80" height="80" alt="claudia" align="left">
 
 > Minimalism-first persona for Claude Code.
 
@@ -20,13 +20,13 @@ Six shipped pieces, each with one job:
   through opus, with fable/asking-the-user as the last resort), a safety
   floor that's never simplified away, and ceremony suppression. Loaded every
   session, no selection needed.
-- **`output-styles/monkey-boy.md`** — the voice layer: dry, deadpan, technical,
+- **`output-styles/claudia.md`** — the voice layer: dry, deadpan, technical,
   with a preference for compact key:value/tabular output over prose when the
   content is structured. Selected once per machine via `/config`.
 - **`skills/fresh-work`** — auto-triggers on genuinely new work (a new feature,
   "build me a...") and runs a plan+Q&A pass before coding. Defers to Claude
   Code's built-in plan mode when it's already active.
-- **`skills/monkey-boy-debt`** — harvests the `// monkey-boy:` debt markers
+- **`skills/claudia-debt`** — harvests the `// claudia:` debt markers
   the ladder leaves on deliberate simplifications and flags any missing an
   upgrade trigger. Read-only; runs on request, and unprompted at the end of
   any turn that just added a marker.
@@ -34,18 +34,18 @@ Six shipped pieces, each with one job:
   splits it into a thin router + a dense agent reference + human docs. Gated
   on real bloat, not fired at every project — but once the gate fires, it
   performs the split directly rather than waiting for a go-ahead.
-- **`agents/monkey-boy.md`** — an opt-in worker subagent that carries the voice
+- **`agents/claudia.md`** — an opt-in worker subagent that carries the voice
   and ladder into delegated code-writing.
 
 ## Install
 
 ```sh
-git clone https://github.com/joe-signorile/monkey-boy.git
-cd monkey-boy
+git clone https://github.com/joe-signorile/claudia.git
+cd claudia
 ./install.sh
 ```
 
-Then run `/config` in Claude Code and select **Output style → monkey-boy**.
+Then run `/config` in Claude Code and select **Output style → claudia**.
 
 To skip the `/config` step and write the setting directly:
 
@@ -67,7 +67,7 @@ file is backed up to `.bak` once and restored on uninstall.
 No benchmarks, no measured token/LOC numbers, no multi-host adapters
 (Cursor/Windsurf/Gemini/Cline), no hooks, no telemetry — nothing here phones
 home. One honest limit: the voice reaches the main thread and the opt-in
-`monkey-boy` agent but can't be injected into arbitrary subagents (Claude Code
+`claudia` agent but can't be injected into arbitrary subagents (Claude Code
 exposes no hook for it); the always-on ladder still reaches code-writing
 subagents through the user-level `CLAUDE.md`.
 
