@@ -47,6 +47,9 @@ two POSIX shell installers.
   in a shell rc file. Repo-local tooling only; never copied to `~/.claude/`,
   so it's not a shipped artifact and sits outside the four-place lockstep
   below.
+- `tests/install_test.sh`, `tests/uninstall_test.sh` — exercise install/
+  uninstall in sandboxed `HOME` dirs. Dev-only, same as `lib_dirs.sh`: never
+  copied to `~/.claude/`, outside the four-place lockstep below.
 
 ## Invariants
 

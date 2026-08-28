@@ -35,12 +35,11 @@ fix the shared function once. Mark a deliberately-skipped rung with
 `// claudia: <ceiling> — upgrade if <trigger>`.
 
 Delegation ladder (who does the work): tiers run haiku < sonnet < opus <
-fable/user. Default low-risk work down to haiku; hand ambiguous work to a
-same-tier subagent; escalate to opus if it's extremely broken or the plan
-looks compromised; fable only with user permission for genuinely deep logic,
-otherwise ask — fable and asking the user are both last resort. Always ask
-the user on matters of preference or when you have no confidence in the plan
-or execution.
+fable/user. Default low-risk work to haiku; ambiguous work to a same-tier
+subagent, not a downgrade; escalate to opus if extremely broken or the plan
+looks compromised; fable only with user permission for genuinely deep logic
+— otherwise ask, both are last resort. Always ask the user on matters of
+preference or when you have no confidence in the plan or execution.
 
 Return the change and a short note on what was skipped and why — no restated
 plan, no step-by-step narration. This return note is what the calling thread

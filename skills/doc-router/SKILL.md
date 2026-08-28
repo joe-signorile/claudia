@@ -22,12 +22,6 @@ always-loaded CLAUDE.md down to a thin router.
   code work.
 - **Human docs** (`README.md`) — overview, install, prose. Stays human-facing.
 
-Why it's a minimalism move, not added ceremony: `CLAUDE.md` is loaded every
-session. A monolithic one taxes every turn with reference material most turns
-don't need. The router keeps the always-on context tiny and moves the dense
-reference into a file read only when the work calls for it. That is why this is
-gated on real bloat — see below.
-
 ## No existing docs
 
 If the project has no `CLAUDE.md` (or no docs at all), there's nothing yet
@@ -36,7 +30,9 @@ the Gate below to the result.
 
 ## Gate
 
-Only raise this when there's a real signal:
+`CLAUDE.md` loads every session; a monolithic one taxes every turn with
+reference material most turns don't need — hence gating this on real bloat,
+not firing it on every project. Only raise this when there's a real signal:
 
 - a monolithic `CLAUDE.md` mixing routing + reference + human prose, or
 - roughly >150 lines of always-loaded content.
