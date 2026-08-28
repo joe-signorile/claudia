@@ -31,7 +31,8 @@ two POSIX shell installers.
   router + dense agent reference + human docs) when a project shows real
   bloat, or on request; TOON vs md by density. Gated on the bloat signal, but
   once the gate fires it performs the split directly — no advise-then-offer
-  pause.
+  pause. If no `CLAUDE.md` exists yet, runs `init` first, then re-applies
+  the gate.
 - `agents/monkey-boy.md` — opt-in worker subagent carrying the voice +
   ladder into delegated code-writing.
 - `install.sh` / `uninstall.sh` — symlink artifacts into `~/.claude/` (one

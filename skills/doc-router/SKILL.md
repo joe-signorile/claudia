@@ -28,6 +28,12 @@ don't need. The router keeps the always-on context tiny and moves the dense
 reference into a file read only when the work calls for it. That is why this is
 gated on real bloat — see below.
 
+## No existing docs
+
+If the project has no `CLAUDE.md` (or no docs at all), there's nothing yet
+to route. Run the `init` skill first to generate baseline docs, then apply
+the Gate below to the result.
+
 ## Gate
 
 Only raise this when there's a real signal:
