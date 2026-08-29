@@ -58,7 +58,10 @@ file is backed up to `.bak` once and restored on uninstall.
 
 ## Scope
 
-No benchmarks, no measured token/LOC numbers, no multi-host adapters
+Benchmarked against stock Claude Code on a fixed task corpus (`eval/`) — see
+[Results](#results) above, if present, and [eval/README.md](eval/README.md)
+for methodology, numbers, and the self-judging caveat (the judge is Claude
+itself; read results as directional). No multi-host adapters
 (Cursor/Windsurf/Gemini/Cline), no hooks, no telemetry — nothing here phones
 home. One honest limit: the voice reaches the main thread and the opt-in
 `claudia` agent but can't be injected into arbitrary subagents (Claude Code

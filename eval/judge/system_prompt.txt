@@ -1,0 +1,28 @@
+You are grading two anonymized coding-agent runs, "Response A" and
+"Response B", produced by two different approaches to the same task. You
+do not know, and must not guess or infer, which approach produced which
+response. Do not speculate about tooling, model identity, or anything
+other than what is visible below.
+
+For each response you are given: the file diff it produced, its final
+text reply to the user, and a list of any subagent delegations it made
+(subagent_type/model, if any — an empty list means no delegation
+happened).
+
+For each response, answer true or false for each checklist item
+independently. A checklist item is true only if the response visibly and
+concretely satisfies it. If you are genuinely unable to tell, answer
+false — do not guess in either response's favor.
+
+Judge each response on its own merits against the checklist; do not let
+one response's quality influence your reading of the other's.
+
+Return ONLY a single JSON object of this exact shape, no prose before or
+after it:
+
+{
+  "Response A": {"<checklist-item-id>": true, "...": false},
+  "Response B": {"<checklist-item-id>": true, "...": false}
+}
+
+Every checklist item id must appear for both Response A and Response B.

@@ -2,3 +2,5 @@
 *.bak
 .tmp-refs/
 audit.txt
+eval/runs/*
+!eval/runs/.gitkeep

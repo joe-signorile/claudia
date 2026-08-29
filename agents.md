@@ -50,6 +50,13 @@ two POSIX shell installers.
 - `tests/install_test.sh`, `tests/uninstall_test.sh` — exercise install/
   uninstall in sandboxed `HOME` dirs. Dev-only, same as `lib_dirs.sh`: never
   copied to `~/.claude/`, outside the four-place lockstep below.
+- `eval/` — reproducible eval harness comparing stock Claude Code against a
+  real `install.sh`-seeded claudia install across a fixed task corpus,
+  scored by a blinded LLM judge plus deterministic diff metrics. Repo-local
+  tooling only, like `lib_dirs.sh` — never copied to `~/.claude/`. See
+  `eval/README.md` for methodology and the self-bias disclosure.
+  `eval/results/latest.{md,json}` are committed (regenerated output, never
+  hand-edited); everything under `eval/runs/` is gitignored raw output.
 
 ## Invariants
 
@@ -105,5 +112,36 @@ two POSIX shell installers.
   `claudia-debt` harvests only the file(s) just touched, not a full-repo
   sweep, unless asked. Stated in `CLAUDE.md.snippet` and the output style —
   keep both in sync with this if it changes again.
+- **Eval corpus and README's Results section stay in sync.**
+  `eval/tasks/*.md` is the source of truth for what's measured;
+  `eval/results/latest.{md,json}` is regenerated output, never hand-edited;
+  README's `<!-- claudia:results:start/end -->` block is written only by
+  `eval/propagate_readme.py`, never by hand, and only updates when
+  claudia's aggregate clears the stated margin over vanilla (and isn't a
+  regression from what's currently published). If the task corpus changes,
+  re-run `./eval/unit.sh && ./eval/eval.sh <batch>` before trusting a stale
+  `latest.md`.
+- **`eval/` is split three ways.** `unit.sh` runs the synthetic-fixture
+  corpus (throwaway repos, cheap, 5 trials/task, `--resume`-able).
+  `integration.sh` runs a single hard, real roadmap task against a real
+  external repo (currently `italy-rs`) on its own git worktree/branch per
+  condition, no budget cap, one trial, two-stage plan-then-execute session
+  — a case study, not a statistical sample. `eval.sh` is the shared
+  aggregate+report tail either one's batch dir feeds into; it has no
+  orchestration logic of its own. Both writers use the identical
+  `$BATCH_DIR/<task_id>/<condition>/<trial>/` artifact shape so
+  `aggregate.py`/`report.py`/`judge.py` don't need to know which one
+  produced a given task's data.
+- **`eval/case-studies/` is committed; `eval/runs/` is not.** Raw
+  transcripts/diffs under `eval/runs/<batch>/` are gitignored (large,
+  disposable, regeneratable). `integration.sh` copies just the durable,
+  human-readable diff per condition into `eval/case-studies/<task_id>/`,
+  which *is* committed — that's what "get the diffs into docs" means here.
+- **The eval's marker convention is distinct from the shipped one.**
+  `<!-- claudia:results:start -->`/`...:end -->` (README, written by
+  `propagate_readme.py`) is a separate fence from
+  `<!-- claudia:start -->`/`...:end -->` (reserved for the
+  `CLAUDE.md.snippet` @import payload) — don't collide the two or reuse one
+  for the other's purpose.
 
 Keep this file updated alongside changes.
