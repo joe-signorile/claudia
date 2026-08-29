@@ -160,11 +160,14 @@ own `CLAUDE.md`. Differences from `unit.sh`:
   trial counts vary by category), it just carries a different confidence
   level than a 5-trial fixture task.
 - **Real branches, not throwaway repos.** Each condition gets its own
-  `git worktree`/branch off `master` in the target repo (matching that
-  repo's own worktree-per-agent convention), left in place afterward for
-  inspection — `integration.sh` prints the exact `git worktree remove`/
-  `git branch -D` cleanup commands, it doesn't delete real repo state
-  itself.
+  `git worktree`/branch off `EVAL_BASE_BRANCH` (default
+  `claudia-integration-eval`, a dedicated branch pushed to the target
+  repo's remote precisely so the eval has a stable, known-good anchor
+  independent of wherever `master` moves next) in the target repo
+  (matching that repo's own worktree-per-agent convention), left in place
+  afterward for inspection — `integration.sh` prints the exact
+  `git worktree remove`/`git branch -D` cleanup commands, it doesn't
+  delete real repo state itself.
 - **Plan mode, then an auto-approved resume.** A task this size is meant
   to be planned before it's built. Stage one runs with
   `--permission-mode plan` (model proposes a plan, doesn't execute);

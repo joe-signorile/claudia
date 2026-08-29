@@ -23,6 +23,6 @@ doesn't auto-fill:
 
 `vanilla.diff` / `claudia.diff` in this directory are exact copies of
 `eval/runs/<batch>/gsplat-resample-01/<condition>/1/diff.patch`, taken
-against the `master` commit both branches forked from — copied here
-because `eval/runs/` is gitignored and this is meant to be inspectable
-without re-running anything.
+against the `claudia-integration-eval` commit both branches forked from —
+copied here because `eval/runs/` is gitignored and this is meant to be
+inspectable without re-running anything.

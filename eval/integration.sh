@@ -16,6 +16,11 @@
 #   ./eval/integration.sh                        # runs gsplat-resample-01
 #   ./eval/integration.sh --task foo-01           # a different eval/tasks/ task
 #   ITALY_REPO=/path/to/italy-rs ./eval/integration.sh
+#   EVAL_BASE_BRANCH=claudia-integration-eval ./eval/integration.sh   # default
+#
+# Per-condition branches fork off EVAL_BASE_BRANCH, not master directly —
+# a dedicated, remote-pushed branch so the eval has a stable, known-good
+# anchor point independent of whatever master does next.
 #
 # Writes into the same $BATCH_DIR/<task_id>/<condition>/1/ shape as
 # eval/unit.sh, so eval/eval.sh can aggregate+report either or both.
@@ -25,6 +30,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$REPO_DIR/eval/lib/sandbox.sh"
 
 : "${ITALY_REPO:=$HOME/projects/italy-rs}"
+: "${EVAL_BASE_BRANCH:=claudia-integration-eval}"
 : "${EVAL_MODEL:=sonnet}"
 : "${CLAUDE_CODE_SUBAGENT_MODEL:=sonnet}"
 : "${EVAL_JUDGE_MODEL:=sonnet}"
@@ -55,8 +61,12 @@ awk '/^---$/{c++; next} c>=2' "$task_file" > "$prompt_file"
 prompt="$(cat "$prompt_file")"
 rm -f "$prompt_file"
 
-base_ref="$(git -C "$ITALY_REPO" rev-parse master)"
-echo "Branch point: master @ $base_ref"
+git -C "$ITALY_REPO" rev-parse --verify "$EVAL_BASE_BRANCH" >/dev/null 2>&1 || {
+  echo "no such base branch in $ITALY_REPO: $EVAL_BASE_BRANCH (set EVAL_BASE_BRANCH)" >&2
+  exit 1
+}
+base_ref="$(git -C "$ITALY_REPO" rev-parse "$EVAL_BASE_BRANCH")"
+echo "Branch point: $EVAL_BASE_BRANCH @ $base_ref"
 
 run_condition() {
   # run_condition <condition>
@@ -66,7 +76,7 @@ run_condition() {
   run_dir="$BATCH_DIR/$TASK_ID/$condition/1"
   mkdir -p "$run_dir"
 
-  git -C "$ITALY_REPO" worktree add -b "$branch" "$worktree_dir" master
+  git -C "$ITALY_REPO" worktree add -b "$branch" "$worktree_dir" "$EVAL_BASE_BRANCH"
 
   sandbox="$(make_sandbox)"
   trap 'cleanup_sandbox "$sandbox"' EXIT INT TERM
