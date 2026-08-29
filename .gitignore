@@ -4,3 +4,6 @@
 audit.txt
 eval/runs/*
 !eval/runs/.gitkeep
+__pycache__/
+*.pyc
+/todo
