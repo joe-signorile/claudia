@@ -1,192 +1,406 @@
 {
-  "generated_at": "2026-08-29T16:44:26.857791+00:00",
+  "generated_at": "2026-08-30T00:06:29.801809+00:00",
   "model": "sonnet",
-  "judge_model": "sonnet",
+  "judge_model": "opus",
   "trials_per_task_per_condition": 5,
-  "tasks_run": 7,
+  "tasks_run": 16,
   "aggregate": {
-    "vanilla": 0.7261904761904762,
-    "claudia": 0.7261904761904762
+    "vanilla": 0.5,
+    "claudia": 0.8333333333333334
   },
-  "delta": 0.0,
+  "delta": 0.33333333333333337,
   "by_category": {
     "debt-marker": {
-      "vanilla": 0.3333333333333333,
-      "claudia": 0.3333333333333333
+      "vanilla": null,
+      "claudia": null
     },
     "delegation-ambiguous": {
-      "vanilla": 0.6666666666666666,
-      "claudia": 0.6666666666666666
+      "vanilla": null,
+      "claudia": null
     },
     "delegation-escalate": {
-      "vanilla": 1.0,
-      "claudia": 1.0
+      "vanilla": null,
+      "claudia": null
     },
     "delegation-none-needed": {
-      "vanilla": 1.0,
-      "claudia": 1.0
+      "vanilla": null,
+      "claudia": null
     },
     "delegation-trivial": {
-      "vanilla": 0.3333333333333333,
-      "claudia": 0.3333333333333333
+      "vanilla": null,
+      "claudia": null
+    },
+    "graphics-integration": {
+      "vanilla": 0.5,
+      "claudia": 0.8333333333333334
     },
     "minimalism": {
-      "vanilla": 0.875,
-      "claudia": 0.875
+      "vanilla": null,
+      "claudia": null
+    },
+    "root-cause": {
+      "vanilla": null,
+      "claudia": null
+    },
+    "safety-floor": {
+      "vanilla": null,
+      "claudia": null
+    },
+    "voice": {
+      "vanilla": null,
+      "claudia": null
     }
   },
   "by_task": {
     "debt-marker-01": {
       "category": "debt-marker",
-      "vanilla": 0.3333333333333333,
-      "claudia": 0.3333333333333333,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 10.0,
-          "output_tokens": 844.0,
-          "cache_creation_input_tokens": 10293.6,
-          "cache_read_input_tokens": 120279.6,
-          "total_cost_usd": 0.07467932000000001
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 8.8,
-          "output_tokens": 588.4,
-          "cache_creation_input_tokens": 11844.2,
-          "cache_read_input_tokens": 110777.8,
-          "total_cost_usd": 0.07641896000000001
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     },
     "delegation-ambiguous-01": {
       "category": "delegation-ambiguous",
-      "vanilla": 0.6666666666666666,
-      "claudia": 0.6666666666666666,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 5.2,
-          "output_tokens": 1076.4,
-          "cache_creation_input_tokens": 10017.0,
-          "cache_read_input_tokens": 57530.2,
-          "total_cost_usd": 0.06332544
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 4.8,
-          "output_tokens": 831.0,
-          "cache_creation_input_tokens": 11438.4,
-          "cache_read_input_tokens": 54749.6,
-          "total_cost_usd": 0.06600112
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     },
     "delegation-escalate-01": {
       "category": "delegation-escalate",
-      "vanilla": 1.0,
-      "claudia": 1.0,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 4.0,
-          "output_tokens": 400.0,
-          "cache_creation_input_tokens": 9506.2,
-          "cache_read_input_tokens": 41978.4,
-          "total_cost_usd": 0.051417479999999995
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 4.0,
-          "output_tokens": 231.2,
-          "cache_creation_input_tokens": 11228.2,
-          "cache_read_input_tokens": 43687.0,
-          "total_cost_usd": 0.056960199999999996
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     },
     "delegation-none-01": {
       "category": "delegation-none-needed",
-      "vanilla": 1.0,
-      "claudia": 1.0,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 8.0,
-          "output_tokens": 325.6,
-          "cache_creation_input_tokens": 9524.4,
-          "cache_read_input_tokens": 93516.2,
-          "total_cost_usd": 0.06106784
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 7.6,
-          "output_tokens": 292.0,
-          "cache_creation_input_tokens": 11286.4,
-          "cache_read_input_tokens": 93222.0,
-          "total_cost_usd": 0.0677222
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     },
     "delegation-trivial-01": {
       "category": "delegation-trivial",
-      "vanilla": 0.3333333333333333,
-      "claudia": 0.3333333333333333,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 10.0,
-          "output_tokens": 1372.0,
-          "cache_creation_input_tokens": 11584.4,
-          "cache_read_input_tokens": 122720.2,
-          "total_cost_usd": 0.08561263999999999
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 8.0,
-          "output_tokens": 1277.8,
-          "cache_creation_input_tokens": 13222.2,
-          "cache_read_input_tokens": 99912.2,
-          "total_cost_usd": 0.08665924
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "gsplat-resample-01": {
+      "category": "graphics-integration",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "gsplat-resample-01--opus-high": {
+      "category": "graphics-integration",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": 96.0,
+          "output_tokens": 69155.0,
+          "cache_creation_input_tokens": 253744.0,
+          "cache_read_input_tokens": 5170926.0,
+          "total_cost_usd": 6.853515999999999
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "gsplat-resample-01--sonnet-medium": {
+      "category": "graphics-integration",
+      "vanilla": 0.5,
+      "claudia": 0.8333333333333334,
+      "trials": 1,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": 84.0,
+          "output_tokens": 27063.0,
+          "cache_creation_input_tokens": 115456.0,
+          "cache_read_input_tokens": 3356937.0,
+          "total_cost_usd": 1.7302035
+        },
+        "claudia": {
+          "input_tokens": 96.0,
+          "output_tokens": 27195.0,
+          "cache_creation_input_tokens": 154315.0,
+          "cache_read_input_tokens": 5286698.0,
+          "total_cost_usd": 3.0223639999999996
         }
       }
     },
     "minimalism-oneliner-01": {
       "category": "minimalism",
-      "vanilla": 1.0,
-      "claudia": 1.0,
-      "trials": 5,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 6.4,
-          "output_tokens": 462.4,
-          "cache_creation_input_tokens": 9665.4,
-          "cache_read_input_tokens": 73033.0,
-          "total_cost_usd": 0.058926
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 6.0,
-          "output_tokens": 469.4,
-          "cache_creation_input_tokens": 11452.0,
-          "cache_read_input_tokens": 71352.2,
-          "total_cost_usd": 0.06580844
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     },
     "minimalism-reuse-01": {
       "category": "minimalism",
-      "vanilla": 0.75,
-      "claudia": 0.75,
-      "trials": 2,
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
       "tokens": {
         "vanilla": {
-          "input_tokens": 27.0,
-          "output_tokens": 3578.0,
-          "cache_creation_input_tokens": 14492.0,
-          "cache_read_input_tokens": 367471.5,
-          "total_cost_usd": 0.1683168
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         },
         "claudia": {
-          "input_tokens": 19.0,
-          "output_tokens": 2410.5,
-          "cache_creation_input_tokens": 14872.5,
-          "cache_read_input_tokens": 265051.0,
-          "total_cost_usd": 0.1376687
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "minimalism-stdlib-01": {
+      "category": "minimalism",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "root-cause-01": {
+      "category": "root-cause",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "safety-floor-a11y-01": {
+      "category": "safety-floor",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "safety-floor-secret-01": {
+      "category": "safety-floor",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "safety-floor-validation-01": {
+      "category": "safety-floor",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        }
+      }
+    },
+    "voice-01": {
+      "category": "voice",
+      "vanilla": null,
+      "claudia": null,
+      "trials": 0,
+      "tokens": {
+        "vanilla": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
+        },
+        "claudia": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "total_cost_usd": null
         }
       }
     }
@@ -196,61 +410,68 @@
     "claudia": 0
   },
   "activation_total": {
-    "vanilla": 33,
-    "claudia": 33
+    "vanilla": 72,
+    "claudia": 72
   },
   "run_failures": {
-    "vanilla": 1,
-    "claudia": 1
+    "vanilla": 70,
+    "claudia": 71
   },
   "token_usage": {
     "aggregate": {
       "vanilla": {
-        "input_tokens": 10.085714285714285,
-        "output_tokens": 1151.2,
-        "cache_creation_input_tokens": 10726.142857142857,
-        "cache_read_input_tokens": 125218.44285714286,
-        "total_cost_usd": 0.08047793142857142
+        "input_tokens": 90.0,
+        "output_tokens": 48109.0,
+        "cache_creation_input_tokens": 184600.0,
+        "cache_read_input_tokens": 4263931.5,
+        "total_cost_usd": 4.2918597499999995
       },
       "claudia": {
-        "input_tokens": 8.314285714285715,
-        "output_tokens": 871.4714285714286,
-        "cache_creation_input_tokens": 12191.985714285713,
-        "cache_read_input_tokens": 105535.97142857143,
-        "total_cost_usd": 0.07960555142857142
+        "input_tokens": 96.0,
+        "output_tokens": 27195.0,
+        "cache_creation_input_tokens": 154315.0,
+        "cache_read_input_tokens": 5286698.0,
+        "total_cost_usd": 3.0223639999999996
       }
     },
     "model_usage_totals": {
       "vanilla": {
         "claude-haiku-4-5-20251001": {
-          "input_tokens": 29701,
-          "output_tokens": 430,
+          "input_tokens": 2296,
+          "output_tokens": 42,
           "cache_read_input_tokens": 0,
           "cache_creation_input_tokens": 0,
-          "cost_usd": 0.03185100000000001
+          "cost_usd": 0.002506
+        },
+        "claude-opus-5": {
+          "input_tokens": 96,
+          "output_tokens": 69155,
+          "cache_read_input_tokens": 5170926,
+          "cache_creation_input_tokens": 253744,
+          "cost_usd": 6.852257999999999
         },
         "claude-sonnet-5": {
-          "input_tokens": 272,
-          "output_tokens": 29558,
-          "cache_read_input_tokens": 3280231,
-          "cache_creation_input_tokens": 331939,
-          "cost_usd": 2.2799262000000007
+          "input_tokens": 106,
+          "output_tokens": 37299,
+          "cache_read_input_tokens": 3623050,
+          "cache_creation_input_tokens": 175595,
+          "cost_usd": 1.7289555
         }
       },
       "claudia": {
         "claude-haiku-4-5-20251001": {
-          "input_tokens": 29701,
-          "output_tokens": 438,
+          "input_tokens": 1148,
+          "output_tokens": 22,
           "cache_read_input_tokens": 0,
           "cache_creation_input_tokens": 0,
-          "cost_usd": 0.03189100000000001
+          "cost_usd": 0.001258
         },
         "claude-sonnet-5": {
-          "input_tokens": 234,
-          "output_tokens": 23270,
-          "cache_read_input_tokens": 2898606,
-          "cache_creation_input_tokens": 382102,
-          "cost_usd": 2.3412972
+          "input_tokens": 154,
+          "output_tokens": 67719,
+          "cache_read_input_tokens": 6249545,
+          "cache_creation_input_tokens": 315928,
+          "cost_usd": 3.0211059999999996
         }
       }
     }

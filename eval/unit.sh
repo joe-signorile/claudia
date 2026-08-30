@@ -23,7 +23,9 @@
 #
 # Env knobs (see eval/README.md for the full list and cost estimate):
 #   EVAL_TRIALS, EVAL_CONDITIONS, EVAL_MODEL, CLAUDE_CODE_SUBAGENT_MODEL,
-#   EVAL_JUDGE_MODEL, EVAL_PER_RUN_BUDGET
+#   EVAL_JUDGE_MODEL, EVAL_JUDGE_EFFORT, EVAL_PER_RUN_BUDGET,
+#   EVAL_FORCE_JUDGE=1 re-judges every trial even under --resume (a cached
+#   generation run is still skipped; only the judge verdict is redone)
 set -eu
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,6 +36,8 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 : "${EVAL_MODEL:=sonnet}"
 : "${CLAUDE_CODE_SUBAGENT_MODEL:=sonnet}"
 : "${EVAL_JUDGE_MODEL:=sonnet}"
+: "${EVAL_JUDGE_EFFORT:=}"
+: "${EVAL_FORCE_JUDGE:=0}"
 : "${EVAL_PER_RUN_BUDGET:=0.50}"
 export CLAUDE_CODE_SUBAGENT_MODEL
 
@@ -85,6 +89,7 @@ run_is_cached() {
 }
 
 judge_is_cached() {
+  [ "${EVAL_FORCE_JUDGE:-0}" != "1" ] || return 1
   [ "$RESUME" = "1" ] || return 1
   python3 "$REPO_DIR/eval/lib/run_status.py" judge "$1" >/dev/null 2>&1
 }
@@ -164,7 +169,7 @@ run_judge() {
   fi
 
   set +e
-  python3 "$REPO_DIR/eval/judge/judge.py" "$task_file" "$vanilla_summary" "$claudia_summary" "$EVAL_JUDGE_MODEL" \
+  python3 "$REPO_DIR/eval/judge/judge.py" "$task_file" "$vanilla_summary" "$claudia_summary" "$EVAL_JUDGE_MODEL" "$EVAL_JUDGE_EFFORT" \
     > "$judge_file.tmp" 2> "$judge_dir/$trial.stderr.log"
   status=$?
   set -e

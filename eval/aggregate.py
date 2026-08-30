@@ -118,7 +118,12 @@ def main():
 
     for task_dir in sorted(p for p in Path(batch_dir).iterdir() if p.is_dir()):
         task_id = task_dir.name
-        task_file = TASKS_DIR / f"{task_id}.md"
+        # eval/integration.sh writes tiered runs as "<task_id>--<model>-<effort>"
+        # (e.g. gsplat-resample-01--opus-high) so multiple tiers of the same
+        # task coexist in one batch — strip the suffix to find the real task
+        # file's category/checklist.
+        base_task_id = task_id.split("--", 1)[0]
+        task_file = TASKS_DIR / f"{base_task_id}.md"
         category = "unknown"
         if task_file.exists():
             meta, _ = parse(task_file)

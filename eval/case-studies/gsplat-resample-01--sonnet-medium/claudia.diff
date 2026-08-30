@@ -1,0 +1,626 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3993d87..b4eabf8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -123,6 +123,7 @@ add_executable(italy-rs
+   src/io/gsplat_ply_loader.cpp
+   src/convert/voxelize.cpp
+   src/convert/sdf_baker.cpp
++  src/convert/gsplat_resample.cpp
+   src/render/environment.cpp
+   src/render/procedural_sky.cpp
+ )
+@@ -174,3 +175,11 @@ add_executable(gsplat_ply_loader_test tests/gsplat_ply_loader_test.cpp src/io/gs
+ target_include_directories(gsplat_ply_loader_test PRIVATE src)
+ target_link_libraries(gsplat_ply_loader_test PRIVATE glm::glm)
+ add_test(NAME gsplat_ply_loader_test COMMAND gsplat_ply_loader_test)
++
++# Host-side only (no GPU/OptiX needed): tests the mesh->Gaussian-splat
++# resampler (area-weighted disc placement + tangent-frame orientation), added
++# for the mesh-to-3DGS-resampling roadmap phase (see convert/gsplat_resample.cpp).
++add_executable(gsplat_resample_test tests/gsplat_resample_test.cpp src/convert/gsplat_resample.cpp)
++target_include_directories(gsplat_resample_test PRIVATE src)
++target_link_libraries(gsplat_resample_test PRIVATE glm::glm)
++add_test(NAME gsplat_resample_test COMMAND gsplat_resample_test)
+diff --git a/humans.md b/humans.md
+index e8ea9a0..e9c5350 100644
+--- a/humans.md
++++ b/humans.md
+@@ -93,6 +93,18 @@ mesh. See `src/convert/sdf_baker.h` for how baking works and its known
+ approximation (no true closest-point query exists in OptiX, so distance is
+ estimated via minimum hit distance over many random directions).
+ 
++To resample that mesh into Gaussian splats instead (unlike `--voxel`/`--sdf`,
++this doesn't need a watertight mesh — it's a surface sampling, not a
++sign-dependent volume bake):
++
++```
++./build/italy-rs path/to/asset.glb --gsplat-resample=200000
++```
++
++`200000` is the target splat count (default if `--gsplat-resample` is given
++with no `=N`). See `src/convert/gsplat_resample.h` for the placement/scale
++math.
++
+ To render an imported Gaussian-splat scene instead of a GLB (a distinct load
+ source, not a representation of a loaded mesh — the two flags aren't
+ combined):
+@@ -167,6 +179,36 @@ correctness headlessly/from a script rather than watching the window.
+ 
+ ## Status
+ 
++**Roadmap phase 4: mesh-to-Gaussian-splat resampling.** Practical
++(non-ML-fit) resampling of a loaded mesh's surface into `GsplatAsset`
++splats: `convert/gsplat_resample.{h,cpp}` scatters one flattened, disc-
++shaped Gaussian per surface sample, deterministically allocated per
++triangle in proportion to area (not stochastic accept/reject, so the
++output count is exact), positioned by a uniform barycentric sample, and
++oriented to the local interpolated tangent frame so each disc lies flush
++with the surface. Scale is derived from mesh area and sample count
++(`sigmaT ~= 0.5 * sqrt(totalArea / N) * overlapFactor`, `sigmaN = sigmaT *
++0.12`) rather than a fixed constant, so density stays sane across meshes of
++different scale. Color comes from the triangle's material (`baseColorFactor`,
++modulated by `baseColorTexture` if present via the nearest-neighbor,
++sRGB-aware sampler shared with `voxelize.cpp` — extracted to
++`convert/texture_sample.h` so the two CPU-side texture-color paths can't
++drift apart). Opacity is a constant tuned for the existing alpha-correct
++stochastic compositing in `__anyhit__gsplat` — nothing on the render side
++changed; this reuses the Gaussian-splat import path (roadmap phase 3,
++below) end to end. Pure CPU, like `voxelize.cpp` — no third OptiX call site.
++New `Representation::GsplatResample` UI radio button + "Splat count"
++slider (this IS a resampling of the loaded GLB, unlike `Representation::
++Gsplat`'s file import, but lands in the same `splatAsset`/`haveSplats`
++state since both produce a `GsplatAsset`), `--gsplat-resample=<count>` CLI
++flag, and `ITALY_GSPLAT_RESAMPLE_COUNT` scripted-testing hook. Verified
++numerically (`gsplat_resample_test`: exact output count, positions/bounds
++stay on the source mesh, recovered normal axis and scale-vs-count scaling
++match the formulas) rather than visually, since — unlike the phase 3
++import — there's a predictable numeric answer to check per doctrine's
++"render it both ways and look" being the *fallback*, not the only tool,
++when ground truth is computable directly.
++
+ **Roadmap phase 3: Gaussian-splat import.** Imports pre-generated 3D
+ Gaussian Splatting `.ply` scenes (the format `s-rank`'s triposplat and most
+ 3DGS trainers/exporters write) and renders them path-traced, not fit from a
+@@ -481,8 +523,10 @@ the test's own assertion threshold turned out to be separately wrong too
+ was replaced with a resolution-derived bound.
+ 
+ All 10 planned MVP phases are now done. See the plan doc for the full
+-phase list and out-of-scope items (Gaussian-splat resampling, full VCM/
+-ReSTIR caustics, Metal backend — all explicitly deferred, not forgotten).
++phase list and remaining out-of-scope items (full VCM/ReSTIR caustics,
++Metal backend — deferred, not forgotten; mesh-to-Gaussian-splat
++resampling, also originally deferred here, shipped as roadmap phase 4
++above).
+ 
+ **Beauty features added alongside the correctness pass**, once the doctrine
+ ladder made "which of these is worth doing" an answerable question:
+diff --git a/src/app/main.cpp b/src/app/main.cpp
+index dd51780..2dc1b09 100644
+--- a/src/app/main.cpp
++++ b/src/app/main.cpp
+@@ -20,6 +20,7 @@
+ #include <stb_image_write.h>
+ 
+ #include "app/app_window.h"
++#include "convert/gsplat_resample.h"
+ #include "convert/sdf_baker.h"
+ #include "convert/voxelize.h"
+ #include "core/orbit_camera.h"
+@@ -87,9 +88,19 @@ void dumpFrameIfRequested(const italy::OptixRenderer &renderer, GLFWwindow *wind
+ constexpr int kMinResolution = 8;
+ constexpr int kMaxResolution = 512;
+ 
++// Separate range from kMin/MaxResolution: splat count and voxel/SDF grid
++// resolution have very different natural scales, and neither value is a
++// sane default for the other's knob.
++constexpr int kMinGsplatResampleCount = 1000;
++constexpr int kMaxGsplatResampleCount = 2000000;
++
+ // Gsplat is a distinct load source, not a resampling of the loaded GLB mesh
+-// like Voxel/Sdf are — see rebuildScene()'s dispatch.
+-enum class Representation : int { Mesh, Voxel, Sdf, Gsplat };
++// like Voxel/Sdf are — see rebuildScene()'s dispatch. GsplatResample IS a
++// resampling of the loaded mesh (mesh -> scattered Gaussian discs, see
++// convert/gsplat_resample.h) — grouped with Voxel/Sdf in rebuildScene()'s
++// `if (state.haveMesh)` block even though its output lands in the same
++// splatAsset/haveSplats fields Gsplat uses, since both produce a GsplatAsset.
++enum class Representation : int { Mesh, Voxel, Sdf, Gsplat, GsplatResample };
+ enum class EnvChoice : int { None, Overcast, Midnight, Noon, Custom, ProceduralSky };
+ 
+ // Everything the UI edits, plus the loaded/resampled assets those edits
+@@ -119,6 +130,11 @@ struct AppState {
+   // thinner than a cell — spokes, cables, thin brackets — to break up into
+   // floating fragments. Voxel occupancy is sparse, so it scales gently too.
+   int resolution = 128;
++  // Target splat count for the GsplatResample representation (mesh ->
++  // Gaussian-splat resampling, see convert/gsplat_resample.h) — a separate
++  // knob from `resolution` above, not reused, since the two have unrelated
++  // natural ranges.
++  int gsplatResampleCount = 200000;
+   EnvChoice envChoice = EnvChoice::None;
+   char hdriPathBuf[512] = "";
+   bool groundPlane = true;
+@@ -207,6 +223,13 @@ void rebuildScene(AppState &state, std::unique_ptr<italy::OptixRenderer> &render
+       haveSdf = true;
+       state.statusLine += " -> SDF (" + std::to_string(state.sdfGrid.nx) + "x" + std::to_string(state.sdfGrid.ny) +
+                            "x" + std::to_string(state.sdfGrid.nz) + ")";
++    } else if (state.representation == Representation::GsplatResample) {
++      // Lands in the same splatAsset/haveSplats fields the Gsplat load
++      // source uses (both produce a GsplatAsset) — the SceneSource dispatch
++      // below doesn't need to know which one filled them in.
++      state.splatAsset = italy::resampleMeshToGsplat(state.meshAsset, state.gsplatResampleCount);
++      state.haveSplats = true;
++      state.statusLine += " -> resampled to " + std::to_string(state.splatAsset.count()) + " splats";
+     }
+   }
+ 
+@@ -332,6 +355,16 @@ int main(int argc, char **argv) {
+     } else if (key == "--gsplat") {
+       state.representation = Representation::Gsplat;
+       std::snprintf(state.gsplatPathBuf, sizeof(state.gsplatPathBuf), "%s", value.c_str());
++    } else if (key == "--gsplat-resample") {
++      state.representation = Representation::GsplatResample;
++      if (!value.empty()) {
++        const int cnt = std::atoi(value.c_str());
++        if (cnt < kMinGsplatResampleCount || cnt > kMaxGsplatResampleCount) {
++          std::fprintf(stderr, "italy: gsplat-resample count %d out of range [%d, %d], clamping\n", cnt,
++                       kMinGsplatResampleCount, kMaxGsplatResampleCount);
++        }
++        state.gsplatResampleCount = std::clamp(cnt, kMinGsplatResampleCount, kMaxGsplatResampleCount);
++      }
+     }
+   }
+ 
+@@ -397,6 +430,10 @@ int main(int argc, char **argv) {
+     state.representation = Representation::Gsplat;
+     std::snprintf(state.gsplatPathBuf, sizeof(state.gsplatPathBuf), "%s", gp);
+   }
++  if (const char *gc = std::getenv("ITALY_GSPLAT_RESAMPLE_COUNT")) {
++    state.representation = Representation::GsplatResample;
++    state.gsplatResampleCount = std::clamp(std::atoi(gc), kMinGsplatResampleCount, kMaxGsplatResampleCount);
++  }
+   if (const char *tm = std::getenv("ITALY_TONEMAP")) {
+     const std::string v = tm;
+     if (v == "agx") state.render.tonemap = italy::TonemapOperator::AgX;
+@@ -497,8 +534,12 @@ int main(int argc, char **argv) {
+         apply |= ImGui::RadioButton("SDF", reinterpret_cast<int *>(&state.representation), 2);
+         ImGui::SameLine();
+         apply |= ImGui::RadioButton("Gsplat", reinterpret_cast<int *>(&state.representation), 3);
++        ImGui::SameLine();
++        apply |= ImGui::RadioButton("Gsplat (resample)", reinterpret_cast<int *>(&state.representation), 4);
+         if (state.representation == Representation::Voxel || state.representation == Representation::Sdf)
+           ImGui::SliderInt("Resolution", &state.resolution, kMinResolution, kMaxResolution);
++        if (state.representation == Representation::GsplatResample)
++          ImGui::SliderInt("Splat count", &state.gsplatResampleCount, kMinGsplatResampleCount, kMaxGsplatResampleCount);
+ 
+         if (state.representation == Representation::Gsplat)
+           ImGui::InputText("Gsplat .ply path", state.gsplatPathBuf, sizeof(state.gsplatPathBuf));
+diff --git a/src/convert/gsplat_resample.cpp b/src/convert/gsplat_resample.cpp
+new file mode 100644
+index 0000000..1319dbd
+--- /dev/null
++++ b/src/convert/gsplat_resample.cpp
+@@ -0,0 +1,179 @@
++#include "convert/gsplat_resample.h"
++
++#include <algorithm>
++#include <cmath>
++#include <limits>
++#include <numeric>
++#include <random>
++
++#include <glm/gtc/quaternion.hpp>
++
++#include "convert/texture_sample.h"
++
++namespace italy {
++namespace {
++
++constexpr float kOverlapFactor = 1.2f;   // neighbor spacing -> sigmaT multiplier; bigger = more overlap, fewer gaps
++constexpr float kThicknessRatio = 0.12f; // sigmaN / sigmaT — how flat the disc is
++constexpr float kDefaultOpacity = 0.85f; // constant per-splat opacity fed into __anyhit__gsplat's stochastic accept
++
++// Duff et al. 2017 "Building an Orthonormal Basis, Revisited" — branchless.
++// Fallback for triangles whose interpolated tangent degenerates (near-zero
++// UV derivative / degenerate UVs) after Gram-Schmidt against the normal.
++void basisFromNormal(const glm::vec3 &n, glm::vec3 &t, glm::vec3 &b) {
++  const float s = n.z >= 0.0f ? 1.0f : -1.0f;
++  const float a = -1.0f / (s + n.z);
++  const float c = n.x * n.y * a;
++  t = glm::vec3(1.0f + s * n.x * n.x * a, s * c, -s * n.x);
++  b = glm::vec3(c, s + n.y * n.y * a, -n.y);
++}
++
++glm::vec3 triangleColorAt(const MeshAsset &mesh, size_t tri, glm::vec2 uv) {
++  const MaterialAsset &mat = mesh.materialForTriangle(tri);
++  if (mat.baseColorTexture >= 0 && mat.baseColorTexture < static_cast<int>(mesh.textures.size())) {
++    const TextureAsset &tex = mesh.textures[mat.baseColorTexture];
++    if (tex.width > 0 && tex.height > 0)
++      return sampleColorNearest(tex, uv) * mat.baseColorFactor;
++  }
++  return mat.baseColorFactor;
++}
++
++} // namespace
++
++GsplatAsset resampleMeshToGsplat(const MeshAsset &mesh, int targetSplatCount) {
++  GsplatAsset out;
++  const int n = std::max(targetSplatCount, 0);
++  const size_t triCount = mesh.triangleCount();
++  if (n == 0 || triCount == 0)
++    return out;
++
++  // Per-triangle area, total area.
++  std::vector<float> area(triCount);
++  double totalArea = 0.0;
++  for (size_t t = 0; t < triCount; ++t) {
++    const glm::vec3 &p0 = mesh.positions[t * 3];
++    const glm::vec3 &p1 = mesh.positions[t * 3 + 1];
++    const glm::vec3 &p2 = mesh.positions[t * 3 + 2];
++    area[t] = 0.5f * glm::length(glm::cross(p1 - p0, p2 - p0));
++    totalArea += area[t];
++  }
++
++  // Deterministic largest-remainder allocation of splat counts per triangle,
++  // proportional to area, summing to exactly n. A degenerate (zero-area)
++  // mesh falls back to a uniform per-triangle split so the function still
++  // returns n splats rather than 0.
++  std::vector<int> perTriCount(triCount, 0);
++  std::vector<float> exact(triCount);
++  int assigned = 0;
++  for (size_t t = 0; t < triCount; ++t) {
++    exact[t] =
++        totalArea > 0.0 ? static_cast<float>(area[t] / totalArea) * n : static_cast<float>(n) / static_cast<float>(triCount);
++    perTriCount[t] = static_cast<int>(exact[t]);
++    assigned += perTriCount[t];
++  }
++  int remainder = n - assigned;
++  std::vector<size_t> order(triCount);
++  std::iota(order.begin(), order.end(), 0);
++  std::sort(order.begin(), order.end(),
++            [&](size_t a, size_t b) { return (exact[a] - perTriCount[a]) > (exact[b] - perTriCount[b]); });
++  for (int i = 0; i < remainder && i < static_cast<int>(triCount); ++i)
++    perTriCount[order[i]] += 1;
++
++  // Global tangential/normal sigma from average sample spacing: for N points
++  // uniformly scattered over area A, average nearest-neighbor spacing is
++  // ~sqrt(A/N). Half that spacing puts neighboring splat centers ~2 sigma
++  // apart, so each splat's 3-sigma disc overlaps its neighbors enough to
++  // hide gaps from stochastic (non-lattice) placement.
++  const float boundsDiag = std::max(glm::length(mesh.boundsMax - mesh.boundsMin), 1e-6f);
++  const float spacing =
++      totalArea > 1e-12 ? std::sqrt(static_cast<float>(totalArea) / n) : boundsDiag / static_cast<float>(std::max(1, n));
++  const float sigmaT = std::max(0.5f * spacing * kOverlapFactor, boundsDiag * 1e-5f);
++  const float sigmaN = sigmaT * kThicknessRatio;
++
++  out.positions.reserve(n);
++  out.scales.reserve(n);
++  out.rotations.reserve(n);
++  out.opacity.reserve(n);
++  out.colorDC.reserve(n);
++
++  const bool haveTangents = mesh.tangents.size() >= mesh.positions.size();
++  const bool haveUvs = mesh.uvs.size() >= mesh.positions.size();
++
++  for (size_t t = 0; t < triCount; ++t) {
++    if (perTriCount[t] == 0)
++      continue;
++    const size_t base = t * 3;
++    const glm::vec3 &p0 = mesh.positions[base];
++    const glm::vec3 &p1 = mesh.positions[base + 1];
++    const glm::vec3 &p2 = mesh.positions[base + 2];
++    const glm::vec3 &n0 = mesh.normals[base];
++    const glm::vec3 &n1 = mesh.normals[base + 1];
++    const glm::vec3 &n2 = mesh.normals[base + 2];
++
++    std::mt19937 rng(static_cast<uint32_t>(t) * 2654435761u + 1u); // deterministic per-triangle seed
++    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
++
++    for (int k = 0; k < perTriCount[t]; ++k) {
++      // Uniform-triangle barycentric sample (Shirley/Osada sqrt trick).
++      const float r1 = unit(rng), r2 = unit(rng);
++      const float sqrtR1 = std::sqrt(r1);
++      const float u = 1.0f - sqrtR1, v = r2 * sqrtR1, w = 1.0f - u - v;
++
++      const glm::vec3 pos = u * p0 + v * p1 + w * p2;
++      const glm::vec3 n = glm::normalize(u * n0 + v * n1 + w * n2);
++
++      glm::vec3 tangent(0.0f);
++      bool haveT = false;
++      if (haveTangents) {
++        const glm::vec3 tRaw = u * glm::vec3(mesh.tangents[base]) + v * glm::vec3(mesh.tangents[base + 1]) +
++                                w * glm::vec3(mesh.tangents[base + 2]);
++        const glm::vec3 tOrtho = tRaw - n * glm::dot(n, tRaw);
++        const float len = glm::length(tOrtho);
++        if (len > 1e-6f) {
++          tangent = tOrtho / len;
++          haveT = true;
++        }
++      }
++      glm::vec3 bitangent;
++      if (haveT) {
++        // Deliberately NOT multiplying by tangents.w (the bitangent sign).
++        // That sign only matters for normal-mapping chirality; using it here
++        // can make (tangent, bitangent, n) a reflection (det -1), which
++        // glm::quat_cast silently mishandles. Splat tangential scale is
++        // isotropic (sigmaT on both axes), so chirality is invisible —
++        // always take the right-handed cross(n, tangent).
++        bitangent = glm::cross(n, tangent);
++      } else {
++        basisFromNormal(n, tangent, bitangent);
++      }
++
++      const glm::mat3 rot(tangent, bitangent, n); // columns: local x,y,z -> world
++      const glm::quat q = glm::quat_cast(rot);
++
++      out.positions.push_back(pos);
++      out.scales.push_back(glm::vec3(sigmaT, sigmaT, sigmaN));
++      out.rotations.push_back(glm::vec4(q.x, q.y, q.z, q.w));
++      out.opacity.push_back(kDefaultOpacity);
++
++      glm::vec3 color = mesh.materialForTriangle(t).baseColorFactor;
++      if (haveUvs) {
++        const glm::vec2 uv = u * mesh.uvs[base] + v * mesh.uvs[base + 1] + w * mesh.uvs[base + 2];
++        color = triangleColorAt(mesh, t, uv);
++      }
++      out.colorDC.push_back(glm::clamp(color, 0.0f, 1.0f));
++    }
++  }
++
++  // Bounds = min/max of positions only, matching gsplat_ply_loader.cpp's
++  // convention — NOT fattened by scale (that's computeSplatAabb's job, used
++  // per-splat by the renderer's BVH, a different and larger quantity).
++  out.boundsMin = glm::vec3(std::numeric_limits<float>::max());
++  out.boundsMax = glm::vec3(std::numeric_limits<float>::lowest());
++  for (const auto &p : out.positions) {
++    out.boundsMin = glm::min(out.boundsMin, p);
++    out.boundsMax = glm::max(out.boundsMax, p);
++  }
++  return out;
++}
++
++} // namespace italy
+diff --git a/src/convert/gsplat_resample.h b/src/convert/gsplat_resample.h
+new file mode 100644
+index 0000000..891f4a3
+--- /dev/null
++++ b/src/convert/gsplat_resample.h
+@@ -0,0 +1,22 @@
++#pragma once
++
++#include "io/gsplat_asset.h"
++#include "io/mesh_asset.h"
++
++namespace italy {
++
++// Resamples a mesh's surface into a Gaussian-splat point set: area-weighted
++// placement of one flattened (disc-shaped) splat per sample, oriented to the
++// local tangent frame so each splat lies flush with the surface. Pure CPU —
++// no OptiX/CUDA — since nothing here needs GPU raycasting (see voxelize.h
++// for the sibling pure-CPU mesh resampler this follows; sdf_baker.cpp/
++// src/render/ remain the only two sanctioned OptiX call sites).
++//
++// `targetSplatCount` is the only public knob (mirrors voxelizeMesh's/
++// bakeSdf's single `resolution` int): the output count is exact for meshes
++// with positive surface area, via deterministic area-proportional
++// allocation per triangle rather than a stochastic accept/reject over
++// samples (see .cpp).
++GsplatAsset resampleMeshToGsplat(const MeshAsset &mesh, int targetSplatCount);
++
++} // namespace italy
+diff --git a/src/convert/texture_sample.h b/src/convert/texture_sample.h
+new file mode 100644
+index 0000000..6ede8e3
+--- /dev/null
++++ b/src/convert/texture_sample.h
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include <algorithm>
++#include <cmath>
++#include <cstddef>
++
++#include <glm/glm.hpp>
++
++#include "io/mesh_asset.h"
++
++namespace italy {
++
++// glTF baseColorTexture is sRGB-encoded (baseColorFactor is linear — only
++// the texture needs decoding). The OptiX texture-sampling path gets this via
++// CUDA's hardware sRGB conversion (see optix_renderer.cpp); CPU-side bakes
++// (voxelize, gsplat resample) have no such hardware, so they need the
++// standard sRGB EOTF explicitly. Skipping it would systematically darken/
++// mis-tint every baked color sourced from a texture.
++inline float srgbToLinear(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
++
++// No V flip: glTF's texture origin is the upper-left, TextureAsset stores rows
++// top-to-bottom (see mesh_asset.h), and the GPU path samples tex2D(u, v)
++// unflipped (pathtracer.cu's MATERIAL_TEXTURED_DIFFUSE branch). Flipping here
++// would make a CPU bake a vertical mirror of what the same asset shows when
++// rendered as a mesh — the representations have to agree.
++inline glm::vec3 sampleColorNearest(const TextureAsset &tex, glm::vec2 uv) {
++  auto wrap = [](float x) { return x - std::floor(x); };
++  const int px = std::clamp(static_cast<int>(wrap(uv.x) * tex.width), 0, tex.width - 1);
++  const int py = std::clamp(static_cast<int>(wrap(uv.y) * tex.height), 0, tex.height - 1);
++  const size_t idx = (static_cast<size_t>(py) * tex.width + px) * 4;
++  const glm::vec3 raw(tex.pixelsRGBA[idx] / 255.0f, tex.pixelsRGBA[idx + 1] / 255.0f,
++                       tex.pixelsRGBA[idx + 2] / 255.0f);
++  // Only base-colour textures are sRGB-encoded; the flag travels with the
++  // texture now, so a linear map that somehow reaches here isn't double-
++  // decoded (see TextureAsset::srgb).
++  if (!tex.srgb)
++    return raw;
++  return glm::vec3(srgbToLinear(raw.r), srgbToLinear(raw.g), srgbToLinear(raw.b));
++}
++
++} // namespace italy
+diff --git a/src/convert/voxelize.cpp b/src/convert/voxelize.cpp
+index 46202bd..8414136 100644
+--- a/src/convert/voxelize.cpp
++++ b/src/convert/voxelize.cpp
+@@ -4,6 +4,8 @@
+ #include <cmath>
+ #include <unordered_map>
+ 
++#include "convert/texture_sample.h"
++
+ namespace italy {
+ namespace {
+ 
+@@ -126,34 +128,6 @@ bool triBoxOverlap(const glm::vec3 &boxCenter, const glm::vec3 &boxHalf, const g
+   return planeBoxOverlap(normal, v0, boxHalf);
+ }
+ 
+-// glTF baseColorTexture is sRGB-encoded (baseColorFactor is linear — only
+-// the texture needs decoding). The OptiX texture-sampling path gets this via
+-// CUDA's hardware sRGB conversion (see optix_renderer.cpp); this CPU-side
+-// bake has no such hardware, so it needs the standard sRGB EOTF explicitly.
+-// Skipping it would systematically darken/mis-tint every voxel color baked
+-// from a texture.
+-float srgbToLinear(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
+-
+-// No V flip: glTF's texture origin is the upper-left, TextureAsset stores rows
+-// top-to-bottom (see mesh_asset.h), and the GPU path samples tex2D(u, v)
+-// unflipped (pathtracer.cu's MATERIAL_TEXTURED_DIFFUSE branch). Flipping here
+-// made the baked voxel colors a vertical mirror of what the same asset shows
+-// when rendered as a mesh — the two representations have to agree.
+-glm::vec3 sampleColorNearest(const TextureAsset &tex, glm::vec2 uv) {
+-  auto wrap = [](float x) { return x - std::floor(x); };
+-  const int px = std::clamp(static_cast<int>(wrap(uv.x) * tex.width), 0, tex.width - 1);
+-  const int py = std::clamp(static_cast<int>(wrap(uv.y) * tex.height), 0, tex.height - 1);
+-  const size_t idx = (static_cast<size_t>(py) * tex.width + px) * 4;
+-  const glm::vec3 raw(tex.pixelsRGBA[idx] / 255.0f, tex.pixelsRGBA[idx + 1] / 255.0f,
+-                      tex.pixelsRGBA[idx + 2] / 255.0f);
+-  // Only base-colour textures are sRGB-encoded; the flag travels with the
+-  // texture now, so a linear map that somehow reaches here isn't double-
+-  // decoded (see TextureAsset::srgb).
+-  if (!tex.srgb)
+-    return raw;
+-  return glm::vec3(srgbToLinear(raw.r), srgbToLinear(raw.g), srgbToLinear(raw.b));
+-}
+-
+ glm::vec3 triangleColor(const MeshAsset &mesh, size_t triangle) {
+   // Per-triangle material lookup: one soup can now carry a whole scene's
+   // worth of materials, so the colour has to be resolved per triangle rather
+diff --git a/tests/gsplat_resample_test.cpp b/tests/gsplat_resample_test.cpp
+new file mode 100644
+index 0000000..46fe91c
+--- /dev/null
++++ b/tests/gsplat_resample_test.cpp
+@@ -0,0 +1,114 @@
++// Standalone sanity check for the mesh->Gaussian-splat resampler — no
++// framework, just asserts, matching this repo's tool-scale rather than
++// pulling in a test runner for one file. Run via the `gsplat_resample_test`
++// CMake target.
++#include <cassert>
++#include <cmath>
++#include <cstdio>
++
++#include <glm/gtc/quaternion.hpp>
++
++#include "convert/gsplat_resample.h"
++
++using italy::MaterialAsset;
++using italy::MeshAsset;
++using italy::resampleMeshToGsplat;
++
++namespace {
++
++// A single unit quad (2 triangles) in the XY plane at z=0, normal +Z,
++// tangent +X, so every splat's expected orientation and bounds are known
++// exactly.
++MeshAsset makeUnitQuad() {
++  MeshAsset mesh;
++  const glm::vec3 n(0, 0, 1);
++  const glm::vec4 tan(1, 0, 0, 1);
++  auto addVert = [&](glm::vec3 p, glm::vec2 uv) {
++    mesh.positions.push_back(p);
++    mesh.normals.push_back(n);
++    mesh.tangents.push_back(tan);
++    mesh.uvs.push_back(uv);
++  };
++  // Two CCW triangles covering [0,1]x[0,1].
++  addVert({0, 0, 0}, {0, 0});
++  addVert({1, 0, 0}, {1, 0});
++  addVert({1, 1, 0}, {1, 1});
++  addVert({0, 0, 0}, {0, 0});
++  addVert({1, 1, 0}, {1, 1});
++  addVert({0, 1, 0}, {0, 1});
++  mesh.boundsMin = glm::vec3(0, 0, 0);
++  mesh.boundsMax = glm::vec3(1, 1, 0);
++  MaterialAsset mat;
++  mat.baseColorFactor = glm::vec3(1, 0, 0);
++  mesh.materials.push_back(mat);
++  return mesh;
++}
++
++} // namespace
++
++int main() {
++  const MeshAsset quad = makeUnitQuad();
++
++  // 1) Exact output count from the largest-remainder allocation.
++  {
++    const auto splats = resampleMeshToGsplat(quad, 2000);
++    assert(splats.count() == 2000);
++
++    // 2) Positions stay on the quad's surface (barycentric interpolation
++    //    doesn't leak off-triangle), and bounds match a manual recompute
++    //    over positions only (not padded by scale).
++    glm::vec3 lo(1e30f), hi(-1e30f);
++    for (size_t i = 0; i < splats.count(); ++i) {
++      const glm::vec3 &p = splats.positions[i];
++      assert(p.x >= -1e-4f && p.x <= 1.0f + 1e-4f);
++      assert(p.y >= -1e-4f && p.y <= 1.0f + 1e-4f);
++      assert(std::fabs(p.z) < 1e-4f);
++      lo = glm::min(lo, p);
++      hi = glm::max(hi, p);
++    }
++    assert(glm::all(glm::lessThan(glm::abs(lo - splats.boundsMin), glm::vec3(1e-5f))));
++    assert(glm::all(glm::lessThan(glm::abs(hi - splats.boundsMax), glm::vec3(1e-5f))));
++
++    // 3) Every splat's local +Z maps to the quad's known normal (+Z) — a
++    //    wrong axis convention or a reflection-matrix bug in quat_cast would
++    //    fail this immediately.
++    for (size_t i = 0; i < splats.count(); ++i) {
++      const glm::vec4 &r = splats.rotations[i];
++      const glm::quat q(r.w, r.x, r.y, r.z);
++      const glm::vec3 worldZ = glm::mat3_cast(q) * glm::vec3(0, 0, 1);
++      assert(glm::length(worldZ - glm::vec3(0, 0, 1)) < 1e-3f);
++    }
++
++    // 4) Disc shape: thin along local Z, uniform tangential radius across a
++    //    uniform-density flat quad.
++    const float sigmaT0 = splats.scales[0].x;
++    for (size_t i = 0; i < splats.count(); ++i) {
++      const glm::vec3 &s = splats.scales[i];
++      assert(s.z < s.x && s.z < s.y);
++      assert(std::fabs(s.x - sigmaT0) < 1e-5f);
++      assert(std::fabs(s.y - sigmaT0) < 1e-5f);
++    }
++
++    // 5) Color flows through baseColorFactor when untextured.
++    for (size_t i = 0; i < splats.count(); ++i)
++      assert(glm::length(splats.colorDC[i] - glm::vec3(1, 0, 0)) < 1e-5f);
++
++    // 6) Opacity is a constant in (0,1].
++    for (size_t i = 0; i < splats.count(); ++i)
++      assert(splats.opacity[i] > 0.0f && splats.opacity[i] <= 1.0f);
++
++    // 7) Quadrupling the target count halves sigmaT (sigmaT ~ sqrt(area/N)),
++    //    tying the formula to N/area rather than a hardcoded constant.
++    const auto splatsDense = resampleMeshToGsplat(quad, 8000);
++    assert(splatsDense.count() == 8000);
++    const float ratio = splatsDense.scales[0].x / sigmaT0;
++    assert(std::fabs(ratio - 0.5f) < 0.02f);
++  }
++
++  // 8) Edge cases: no crash, no divide-by-zero/NaN.
++  assert(resampleMeshToGsplat(quad, 0).count() == 0);
++  assert(resampleMeshToGsplat(MeshAsset{}, 100).count() == 0);
++
++  std::printf("gsplat_resample_test: OK\n");
++  return 0;
++}

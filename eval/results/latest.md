@@ -1,24 +1,28 @@
 # claudia eval results (latest run)
 
-Checklist pass-rate: **claudia 73%** vs **vanilla 73%** (+0pp), 7 tasks x 5 trials, both pinned to `sonnet`. Judge: `sonnet`.
+Checklist pass-rate: **claudia 83%** vs **vanilla 50%** (+33pp), 16 tasks x 5 trials, both pinned to `sonnet`. Judge: `opus`.
 
-**Run failures (rate limit/budget/crash):** vanilla 1/33, claudia 1/33 runs exited non-zero and were excluded from scoring. Re-run `./eval/run.sh --resume <batch>` to fill the gap rather than starting over — see eval/README.md.
-Activation check: 33/33 vanilla and 33/33 claudia runs confirmed correctly configured (output style, agent, and skills present only on the claudia arm).
+**Run failures (rate limit/budget/crash):** vanilla 70/72, claudia 71/72 runs exited non-zero and were excluded from scoring. Re-run `./eval/unit.sh --resume <batch>` to fill the gap rather than starting over — see eval/README.md.
+Activation check: 72/72 vanilla and 72/72 claudia runs confirmed correctly configured (output style, agent, and skills present only on the claudia arm).
 
 **Self-bias caveat:** the judge is Claude — same family as the systems under test. There is no independent/human cross-check in this framework. Read these numbers as directional, not definitive. See eval/README.md#self-bias for the full disclosure.
 
-Generated: 2026-08-29T16:44:26.857791+00:00
+Generated: 2026-08-30T00:06:29.801809+00:00
 
 ## By category
 
 | Category | vanilla | claudia |
 |---|---|---|
-| debt-marker | 33% | 33% |
-| delegation-ambiguous | 67% | 67% |
-| delegation-escalate | 100% | 100% |
-| delegation-none-needed | 100% | 100% |
-| delegation-trivial | 33% | 33% |
-| minimalism | 88% | 88% |
+| debt-marker | n/a | n/a |
+| delegation-ambiguous | n/a | n/a |
+| delegation-escalate | n/a | n/a |
+| delegation-none-needed | n/a | n/a |
+| delegation-trivial | n/a | n/a |
+| graphics-integration | 50% | 83% |
+| minimalism | n/a | n/a |
+| root-cause | n/a | n/a |
+| safety-floor | n/a | n/a |
+| voice | n/a | n/a |
 
 Trial counts vary by category — a case-study category run once per condition (e.g. `graphics-integration`) sits at a different confidence level than one averaged over 5 fixture trials. See the `trials` column in the by-task table below for each task's real count.
 
@@ -28,13 +32,22 @@ Checklist score is measured against usage on the same run, not in isolation — 
 
 | Task | Category | trials | vanilla score | claudia score | vanilla in/out/cache-r/cache-w tok | claudia in/out/cache-r/cache-w tok | vanilla $ | claudia $ | Δ tokens (in/out/cache-r/cache-w) | Δ $ |
 |---|---|---|---|---|---|---|---|---|---|---|
-| debt-marker-01 | debt-marker | 5 | 33% | 33% | 10/844/120,280/10,294 | 9/588/110,778/11,844 | $0.0747 | $0.0764 | -12%/-30%/-8%/+15% | +2% |
-| delegation-ambiguous-01 | delegation-ambiguous | 5 | 67% | 67% | 5/1,076/57,530/10,017 | 5/831/54,750/11,438 | $0.0633 | $0.0660 | -8%/-23%/-5%/+14% | +4% |
-| delegation-escalate-01 | delegation-escalate | 5 | 100% | 100% | 4/400/41,978/9,506 | 4/231/43,687/11,228 | $0.0514 | $0.0570 | +0%/-42%/+4%/+18% | +11% |
-| delegation-none-01 | delegation-none-needed | 5 | 100% | 100% | 8/326/93,516/9,524 | 8/292/93,222/11,286 | $0.0611 | $0.0677 | -5%/-10%/-0%/+18% | +11% |
-| delegation-trivial-01 | delegation-trivial | 5 | 33% | 33% | 10/1,372/122,720/11,584 | 8/1,278/99,912/13,222 | $0.0856 | $0.0867 | -20%/-7%/-19%/+14% | +1% |
-| minimalism-oneliner-01 | minimalism | 5 | 100% | 100% | 6/462/73,033/9,665 | 6/469/71,352/11,452 | $0.0589 | $0.0658 | -6%/+2%/-2%/+18% | +12% |
-| minimalism-reuse-01 | minimalism | 2 | 75% | 75% | 27/3,578/367,472/14,492 | 19/2,410/265,051/14,872 | $0.1683 | $0.1377 | -30%/-33%/-28%/+3% | -18% |
+| debt-marker-01 | debt-marker | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| delegation-ambiguous-01 | delegation-ambiguous | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| delegation-escalate-01 | delegation-escalate | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| delegation-none-01 | delegation-none-needed | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| delegation-trivial-01 | delegation-trivial | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| gsplat-resample-01 | graphics-integration | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| gsplat-resample-01--opus-high | graphics-integration | 0 | n/a | n/a | 96/69,155/5,170,926/253,744 | n/a/n/a/n/a/n/a | $6.8535 | n/a | n/a/n/a/n/a/n/a | n/a |
+| gsplat-resample-01--sonnet-medium | graphics-integration | 1 | 50% | 83% | 84/27,063/3,356,937/115,456 | 96/27,195/5,286,698/154,315 | $1.7302 | $3.0224 | +14%/+0%/+57%/+34% | +75% |
+| minimalism-oneliner-01 | minimalism | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| minimalism-reuse-01 | minimalism | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| minimalism-stdlib-01 | minimalism | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| root-cause-01 | root-cause | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| safety-floor-a11y-01 | safety-floor | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| safety-floor-secret-01 | safety-floor | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| safety-floor-validation-01 | safety-floor | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
+| voice-01 | voice | 0 | n/a | n/a | n/a/n/a/n/a/n/a | n/a/n/a/n/a/n/a | n/a | n/a | n/a/n/a/n/a/n/a | n/a |
 
 Δ columns are claudia vs vanilla, signed — negative means claudia used less. This is the direct answer to "does claudia buy any quality gain at the cost of more tokens, or is it cheaper too."
 
@@ -42,19 +55,20 @@ Checklist score is measured against usage on the same run, not in isolation — 
 
 | Metric | vanilla (mean/task) | claudia (mean/task) | Δ (claudia vs vanilla) |
 |---|---|---|---|
-| Input tokens | 10 | 8 | -18% |
-| Output tokens | 1,151 | 871 | -24% |
-| Cache read tokens | 125,218 | 105,536 | -16% |
-| Cache write (creation) tokens | 10,726 | 12,192 | +14% |
-| Cost (USD) | $0.0805 | $0.0796 | -1% |
+| Input tokens | 90 | 96 | +7% |
+| Output tokens | 48,109 | 27,195 | -43% |
+| Cache read tokens | 4,263,932 | 5,286,698 | +24% |
+| Cache write (creation) tokens | 184,600 | 154,315 | -16% |
+| Cost (USD) | $4.2919 | $3.0224 | -30% |
 
 ### Model-tier usage totals (summed across all runs — shows delegation's cost effect directly: work pushed to a cheaper tier shows up here, not just in the checklist)
 
 | Condition | Model | Input tok | Output tok | Cache read | Cache write | Cost (USD) |
 |---|---|---|---|---|---|---|
-| vanilla | claude-haiku-4-5-20251001 | 29,701 | 430 | 0 | 0 | $0.0319 |
-| vanilla | claude-sonnet-5 | 272 | 29,558 | 3,280,231 | 331,939 | $2.2799 |
-| claudia | claude-haiku-4-5-20251001 | 29,701 | 438 | 0 | 0 | $0.0319 |
-| claudia | claude-sonnet-5 | 234 | 23,270 | 2,898,606 | 382,102 | $2.3413 |
+| vanilla | claude-haiku-4-5-20251001 | 2,296 | 42 | 0 | 0 | $0.0025 |
+| vanilla | claude-opus-5 | 96 | 69,155 | 5,170,926 | 253,744 | $6.8523 |
+| vanilla | claude-sonnet-5 | 106 | 37,299 | 3,623,050 | 175,595 | $1.7290 |
+| claudia | claude-haiku-4-5-20251001 | 1,148 | 22 | 0 | 0 | $0.0013 |
+| claudia | claude-sonnet-5 | 154 | 67,719 | 6,249,545 | 315,928 | $3.0211 |
 
-Reproduce: `./eval/run.sh` (see eval/README.md for methodology, cost estimate, and how to run a cheap subset).
+Reproduce: `./eval/unit.sh && ./eval/eval.sh <batch>` (see eval/README.md for methodology, cost estimate, and how to run a cheap subset).

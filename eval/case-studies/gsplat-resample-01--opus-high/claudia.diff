@@ -1,0 +1,356 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3993d87..24fb002 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -121,8 +121,10 @@ add_executable(italy-rs
+   src/io/gltf_loader.cpp
+   src/io/mesh_validate.cpp
+   src/io/gsplat_ply_loader.cpp
++  src/io/gsplat_ply_writer.cpp
+   src/convert/voxelize.cpp
+   src/convert/sdf_baker.cpp
++  src/convert/gsplat_fit.cpp
+   src/render/environment.cpp
+   src/render/procedural_sky.cpp
+ )
+@@ -174,3 +176,12 @@ add_executable(gsplat_ply_loader_test tests/gsplat_ply_loader_test.cpp src/io/gs
+ target_include_directories(gsplat_ply_loader_test PRIVATE src)
+ target_link_libraries(gsplat_ply_loader_test PRIVATE glm::glm)
+ add_test(NAME gsplat_ply_loader_test COMMAND gsplat_ply_loader_test)
++
++# Host-side only (no GPU/OptiX needed): tests the mesh -> 3DGS fitter and the
++# .ply writer, including a write/read round trip through the loader (see
++# tests/gsplat_fit_test.cpp).
++add_executable(gsplat_fit_test tests/gsplat_fit_test.cpp src/convert/gsplat_fit.cpp
++                                src/io/gsplat_ply_writer.cpp src/io/gsplat_ply_loader.cpp)
++target_include_directories(gsplat_fit_test PRIVATE src)
++target_link_libraries(gsplat_fit_test PRIVATE glm::glm)
++add_test(NAME gsplat_fit_test COMMAND gsplat_fit_test)
+diff --git a/src/app/main.cpp b/src/app/main.cpp
+index dd51780..4d8f69a 100644
+--- a/src/app/main.cpp
++++ b/src/app/main.cpp
+@@ -20,11 +20,13 @@
+ #include <stb_image_write.h>
+ 
+ #include "app/app_window.h"
++#include "convert/gsplat_fit.h"
+ #include "convert/sdf_baker.h"
+ #include "convert/voxelize.h"
+ #include "core/orbit_camera.h"
+ #include "io/gltf_loader.h"
+ #include "io/gsplat_ply_loader.h"
++#include "io/gsplat_ply_writer.h"
+ #include "io/mesh_validate.h"
+ #include "render/environment.h"
+ #include "render/optix_renderer.h"
+@@ -87,9 +89,18 @@ void dumpFrameIfRequested(const italy::OptixRenderer &renderer, GLFWwindow *wind
+ constexpr int kMinResolution = 8;
+ constexpr int kMaxResolution = 512;
+ 
+-// Gsplat is a distinct load source, not a resampling of the loaded GLB mesh
+-// like Voxel/Sdf are — see rebuildScene()'s dispatch.
+-enum class Representation : int { Mesh, Voxel, Sdf, Gsplat };
++// Same idea for the splat-fitting count: shared by the UI slider and
++// --splat-fit so neither can accept a count the other rejects. The ceiling
++// is a memory bound, not a quality one — every splat costs one OptiX custom
++// AABB plus five device arrays' worth of per-primitive data.
++constexpr int kMinSplatCount = 1000;
++constexpr int kMaxSplatCount = 2000000;
++
++// Gsplat is a distinct load source (an imported .ply); SplatFit is a
++// resampling of the loaded GLB mesh, like Voxel/Sdf — see rebuildScene()'s
++// dispatch, where the two enter by different paths and meet at the same
++// SceneSource::splats field.
++enum class Representation : int { Mesh, Voxel, Sdf, Gsplat, SplatFit };
+ enum class EnvChoice : int { None, Overcast, Midnight, Noon, Custom, ProceduralSky };
+ 
+ // Everything the UI edits, plus the loaded/resampled assets those edits
+@@ -108,6 +119,11 @@ struct AppState {
+   italy::GsplatAsset splatAsset;
+   bool haveSplats = false;
+   char gsplatPathBuf[512] = "";
++  // Mesh -> 3DGS resampling (Representation::SplatFit): fills the same
++  // splatAsset an import would, from meshAsset instead of from a file.
++  int splatFitCount = 200000;
++  char splatExportPathBuf[512] = "splats.ply";
++  bool exportSplatsPending = false; // set by --splat-out, serviced by rebuildScene()
+   italy::EnvironmentMap environment;
+   bool haveEnvironment = false;
+ 
+@@ -146,6 +162,25 @@ struct AppState {
+   std::string statusLine = "Showing the built-in test scene.";
+ };
+ 
++// Writes the current splat set to a .ply. Plain file I/O — no GL and no
++// CUDA — so unlike rebuildScene() this is safe to call straight from either
++// window's draw callback, and from the CLI path too. Shared by the UI button
++// and --splat-out so the two can't drift apart.
++void exportSplats(AppState &state) {
++  if (!state.haveSplats) {
++    state.statusLine = "No splats to export.";
++    return;
++  }
++  std::string err;
++  if (italy::saveGsplatPly(state.splatExportPathBuf, state.splatAsset, err)) {
++    state.statusLine = "Wrote " + std::to_string(state.splatAsset.count()) + " splats to " +
++                        std::string(state.splatExportPathBuf);
++  } else {
++    state.statusLine = "Failed to write " + std::string(state.splatExportPathBuf) + ": " + err;
++    std::fprintf(stderr, "italy: %s\n", state.statusLine.c_str());
++  }
++}
++
+ // Re-loads/re-resamples everything from the current UI state and rebuilds
+ // the renderer from scratch. Deliberately one all-or-nothing "apply" step
+ // rather than incrementally patching the live scene — OptixRenderer has no
+@@ -207,9 +242,27 @@ void rebuildScene(AppState &state, std::unique_ptr<italy::OptixRenderer> &render
+       haveSdf = true;
+       state.statusLine += " -> SDF (" + std::to_string(state.sdfGrid.nx) + "x" + std::to_string(state.sdfGrid.ny) +
+                            "x" + std::to_string(state.sdfGrid.nz) + ")";
++    } else if (state.representation == Representation::SplatFit) {
++      // Reaches the renderer through SceneSource::splats, exactly as an
++      // imported .ply does — the fit's whole job is to produce the same
++      // GsplatAsset the loader would have.
++      italy::GsplatFitParams fit;
++      fit.splatCount = state.splatFitCount;
++      state.splatAsset = italy::fitSplatsToMesh(state.meshAsset, fit);
++      state.haveSplats = state.splatAsset.count() > 0;
++      state.statusLine += " -> fitted " + std::to_string(state.splatAsset.count()) + " splats";
++      if (!state.haveSplats)
++        state.statusLine += " (mesh has no surface area)";
+     }
+   }
+ 
++  // After whichever path produced splats (fit or import), so --splat-out
++  // works for both. Fires once: it's a scripted one-shot, not a mode.
++  if (state.exportSplatsPending && state.haveSplats) {
++    exportSplats(state);
++    state.exportSplatsPending = false;
++  }
++
+   state.haveEnvironment = false;
+   std::string hdriPath;
+   switch (state.envChoice) {
+@@ -329,6 +382,18 @@ int main(int argc, char **argv) {
+     } else if (key == "--hdri") {
+       state.envChoice = EnvChoice::Custom;
+       std::snprintf(state.hdriPathBuf, sizeof(state.hdriPathBuf), "%s", value.c_str());
++    } else if (key == "--splat-fit") {
++      state.representation = Representation::SplatFit;
++      if (!value.empty()) {
++        const int n = std::atoi(value.c_str());
++        if (n < kMinSplatCount || n > kMaxSplatCount)
++          std::fprintf(stderr, "italy: splat count %d out of range [%d, %d], clamping\n", n, kMinSplatCount,
++                       kMaxSplatCount);
++        state.splatFitCount = std::clamp(n, kMinSplatCount, kMaxSplatCount);
++      }
++    } else if (key == "--splat-out") {
++      std::snprintf(state.splatExportPathBuf, sizeof(state.splatExportPathBuf), "%s", value.c_str());
++      state.exportSplatsPending = true;
+     } else if (key == "--gsplat") {
+       state.representation = Representation::Gsplat;
+       std::snprintf(state.gsplatPathBuf, sizeof(state.gsplatPathBuf), "%s", value.c_str());
+@@ -497,8 +562,17 @@ int main(int argc, char **argv) {
+         apply |= ImGui::RadioButton("SDF", reinterpret_cast<int *>(&state.representation), 2);
+         ImGui::SameLine();
+         apply |= ImGui::RadioButton("Gsplat", reinterpret_cast<int *>(&state.representation), 3);
++        ImGui::SameLine();
++        apply |= ImGui::RadioButton("Fit splats", reinterpret_cast<int *>(&state.representation), 4);
+         if (state.representation == Representation::Voxel || state.representation == Representation::Sdf)
+           ImGui::SliderInt("Resolution", &state.resolution, kMinResolution, kMaxResolution);
++        if (state.representation == Representation::SplatFit) {
++          // Logarithmic: the useful range spans three orders of magnitude,
++          // and the interesting part (is 20k enough? does 500k help?) is all
++          // at the low end, where a linear slider gives it a few pixels.
++          ImGui::SliderInt("Splat count", &state.splatFitCount, kMinSplatCount, kMaxSplatCount, "%d",
++                            ImGuiSliderFlags_Logarithmic);
++        }
+ 
+         if (state.representation == Representation::Gsplat)
+           ImGui::InputText("Gsplat .ply path", state.gsplatPathBuf, sizeof(state.gsplatPathBuf));
+@@ -507,6 +581,15 @@ int main(int argc, char **argv) {
+ 
+         apply |= ImGui::Button("Load / Apply");
+ 
++        // Offered for fitted and imported splats alike — re-exporting an
++        // import is a no-op round trip, which is exactly what makes it a
++        // useful thing to be able to do by hand.
++        if (state.haveSplats) {
++          ImGui::InputText("Splat .ply out", state.splatExportPathBuf, sizeof(state.splatExportPathBuf));
++          if (ImGui::Button("Export splats"))
++            exportSplats(state); // no GL/CUDA involved, so no applyRequested detour
++        }
++
+         ImGui::Separator();
+         ImGui::Text("HDRI");
+         apply |= ImGui::RadioButton("None", reinterpret_cast<int *>(&state.envChoice), 0);
+diff --git a/src/convert/voxelize.cpp b/src/convert/voxelize.cpp
+index 46202bd..1b5ed99 100644
+--- a/src/convert/voxelize.cpp
++++ b/src/convert/voxelize.cpp
+@@ -1,5 +1,7 @@
+ #include "convert/voxelize.h"
+ 
++#include "convert/mesh_color.h"
++
+ #include <algorithm>
+ #include <cmath>
+ #include <unordered_map>
+@@ -126,51 +128,6 @@ bool triBoxOverlap(const glm::vec3 &boxCenter, const glm::vec3 &boxHalf, const g
+   return planeBoxOverlap(normal, v0, boxHalf);
+ }
+ 
+-// glTF baseColorTexture is sRGB-encoded (baseColorFactor is linear — only
+-// the texture needs decoding). The OptiX texture-sampling path gets this via
+-// CUDA's hardware sRGB conversion (see optix_renderer.cpp); this CPU-side
+-// bake has no such hardware, so it needs the standard sRGB EOTF explicitly.
+-// Skipping it would systematically darken/mis-tint every voxel color baked
+-// from a texture.
+-float srgbToLinear(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
+-
+-// No V flip: glTF's texture origin is the upper-left, TextureAsset stores rows
+-// top-to-bottom (see mesh_asset.h), and the GPU path samples tex2D(u, v)
+-// unflipped (pathtracer.cu's MATERIAL_TEXTURED_DIFFUSE branch). Flipping here
+-// made the baked voxel colors a vertical mirror of what the same asset shows
+-// when rendered as a mesh — the two representations have to agree.
+-glm::vec3 sampleColorNearest(const TextureAsset &tex, glm::vec2 uv) {
+-  auto wrap = [](float x) { return x - std::floor(x); };
+-  const int px = std::clamp(static_cast<int>(wrap(uv.x) * tex.width), 0, tex.width - 1);
+-  const int py = std::clamp(static_cast<int>(wrap(uv.y) * tex.height), 0, tex.height - 1);
+-  const size_t idx = (static_cast<size_t>(py) * tex.width + px) * 4;
+-  const glm::vec3 raw(tex.pixelsRGBA[idx] / 255.0f, tex.pixelsRGBA[idx + 1] / 255.0f,
+-                      tex.pixelsRGBA[idx + 2] / 255.0f);
+-  // Only base-colour textures are sRGB-encoded; the flag travels with the
+-  // texture now, so a linear map that somehow reaches here isn't double-
+-  // decoded (see TextureAsset::srgb).
+-  if (!tex.srgb)
+-    return raw;
+-  return glm::vec3(srgbToLinear(raw.r), srgbToLinear(raw.g), srgbToLinear(raw.b));
+-}
+-
+-glm::vec3 triangleColor(const MeshAsset &mesh, size_t triangle) {
+-  // Per-triangle material lookup: one soup can now carry a whole scene's
+-  // worth of materials, so the colour has to be resolved per triangle rather
+-  // than once for the whole mesh.
+-  const MaterialAsset &mat = mesh.materialForTriangle(triangle);
+-  const size_t base = triangle * 3;
+-  if (mat.baseColorTexture >= 0 && mat.baseColorTexture < static_cast<int>(mesh.textures.size()) &&
+-      base + 2 < mesh.uvs.size()) {
+-    const TextureAsset &tex = mesh.textures[mat.baseColorTexture];
+-    if (tex.width > 0 && tex.height > 0) {
+-      const glm::vec2 uv = (mesh.uvs[base] + mesh.uvs[base + 1] + mesh.uvs[base + 2]) / 3.0f;
+-      return sampleColorNearest(tex, uv) * mat.baseColorFactor;
+-    }
+-  }
+-  return mat.baseColorFactor;
+-}
+-
+ struct CellHash {
+   size_t operator()(const glm::ivec3 &c) const {
+     return (static_cast<size_t>(c.x) * 73856093u) ^ (static_cast<size_t>(c.y) * 19349663u) ^
+@@ -216,7 +173,9 @@ VoxelGrid voxelizeMesh(const MeshAsset &mesh, int resolution) {
+     const glm::ivec3 cellMax =
+         glm::clamp(glm::ivec3(glm::floor((triMax - grid.origin) / grid.voxelSize)), glm::ivec3(0),
+                    glm::ivec3(resolution - 1));
+-    const glm::vec3 color = triangleColor(mesh, t);
++    // Centroid barycentric: one flat colour per triangle, same lookup the
++    // gsplat fitter uses per sample (see convert/mesh_color.h).
++    const glm::vec3 color = sampleMeshColor(mesh, t, glm::vec3(1.0f / 3.0f));
+ 
+     for (int z = cellMin.z; z <= cellMax.z; ++z) {
+       for (int y = cellMin.y; y <= cellMax.y; ++y) {
+diff --git a/src/io/gsplat_asset.h b/src/io/gsplat_asset.h
+index cdbb015..f753dff 100644
+--- a/src/io/gsplat_asset.h
++++ b/src/io/gsplat_asset.h
+@@ -7,8 +7,14 @@
+ 
+ namespace italy {
+ 
+-// One imported Gaussian-splat scene (roadmap phase 3: import pre-generated
+-// 3DGS `.ply` splats, not fit them from a mesh — see gsplat_ply_loader.h).
++// SH-DC-to-RGB: constant term of a real spherical harmonic basis, the same
++// value the 3DGS reference implementation and every compatible exporter use.
++// Lives here rather than in the loader because the writer needs the exact
++// same number for the inverse conversion (see io/gsplat_ply_writer.cpp).
++inline constexpr float kGsplatShC0 = 0.28209479177387814f;
++
++// One Gaussian-splat scene: either imported from a 3DGS `.ply`
++// (gsplat_ply_loader.h) or fitted from a loaded mesh (convert/gsplat_fit.h).
+ // Parallel-array SoA, same shape as MeshAsset, but splats carry their own
+ // color/opacity instead of indexing a material table.
+ //
+diff --git a/src/io/gsplat_ply_loader.cpp b/src/io/gsplat_ply_loader.cpp
+index bc3b9fb..7f1cf2a 100644
+--- a/src/io/gsplat_ply_loader.cpp
++++ b/src/io/gsplat_ply_loader.cpp
+@@ -14,10 +14,6 @@ namespace italy {
+ 
+ namespace {
+ 
+-// SH-DC-to-RGB: constant term of a real spherical harmonic basis, the same
+-// value the 3DGS reference implementation and every compatible exporter use.
+-constexpr float kShC0 = 0.28209479177387814f;
+-
+ enum class PlyType { Int8, UInt8, Int16, UInt16, Int32, UInt32, Float32, Float64 };
+ 
+ size_t plyTypeSize(PlyType t) {
+@@ -251,12 +247,18 @@ bool loadGsplatPly(const std::string &path, GsplatAsset &outSplats, std::string
+     const glm::vec3 scale(std::exp(static_cast<float>(v[fi.scale0])),
+                            std::exp(static_cast<float>(v[fi.scale1])),
+                            std::exp(static_cast<float>(v[fi.scale2])));
+-    const glm::vec4 rot(static_cast<float>(v[fi.rot0]), static_cast<float>(v[fi.rot1]),
+-                         static_cast<float>(v[fi.rot2]), static_cast<float>(v[fi.rot3]));
++    // rot_0 is the *real* part: the 3DGS reference stores quaternions
++    // (w,x,y,z), while GsplatAsset (and the device-side quatRotate in
++    // pathtracer.cu) uses (x,y,z,w). Reading rot_0 as x instead silently
++    // rotates every splat — invisible on near-isotropic synthetic splats,
++    // very visible on the flat anisotropic disks a real trained scene is
++    // made of, which is why it survived this long. See humans.md.
++    const glm::vec4 rot(static_cast<float>(v[fi.rot1]), static_cast<float>(v[fi.rot2]),
++                         static_cast<float>(v[fi.rot3]), static_cast<float>(v[fi.rot0]));
+     const float opacity = sigmoid(static_cast<float>(v[fi.opacity]));
+-    const glm::vec3 color(0.5f + kShC0 * static_cast<float>(v[fi.fdc0]),
+-                           0.5f + kShC0 * static_cast<float>(v[fi.fdc1]),
+-                           0.5f + kShC0 * static_cast<float>(v[fi.fdc2]));
++    const glm::vec3 color(0.5f + kGsplatShC0 * static_cast<float>(v[fi.fdc0]),
++                           0.5f + kGsplatShC0 * static_cast<float>(v[fi.fdc1]),
++                           0.5f + kGsplatShC0 * static_cast<float>(v[fi.fdc2]));
+ 
+     outSplats.positions.push_back(pos);
+     outSplats.scales.push_back(scale);
+diff --git a/tests/gsplat_ply_loader_test.cpp b/tests/gsplat_ply_loader_test.cpp
+index da11602..fee8515 100644
+--- a/tests/gsplat_ply_loader_test.cpp
++++ b/tests/gsplat_ply_loader_test.cpp
+@@ -43,7 +43,7 @@ const char *kAsciiPly =
+     "property float rot_3\n"
+     "end_header\n"
+     "1 2 3 1 0 -1 0 0 0.6931472 1.0986123 1 0 0 0\n"
+-    "-1 0 0.5 0 0 0 -2 0 0 0 0 0 0 1\n";
++    "-1 0 0.5 0 0 0 -2 0 0 0 0.1825742 0.3651484 0.5477226 0.7302967\n";
+ 
+ void writeFile(const std::string &path, const char *contents) {
+   std::ofstream f(path, std::ios::binary);
+@@ -85,6 +85,20 @@ int main() {
+   assert(std::abs(splats.colorDC[0].g - expectedG) < 1e-5f);
+   assert(std::abs(splats.colorDC[0].b - expectedB) < 1e-5f);
+ 
++  // Vertex 0: rot_0..3 = (1,0,0,0) is the identity — the 3DGS reference
++  // writes the quaternion real part *first*, so it must land in .w, not .x.
++  assert(std::abs(splats.rotations[0].x) < 1e-5f);
++  assert(std::abs(splats.rotations[0].y) < 1e-5f);
++  assert(std::abs(splats.rotations[0].z) < 1e-5f);
++  assert(std::abs(splats.rotations[0].w - 1.0f) < 1e-5f);
++
++  // Vertex 1: rot_0..3 = normalize(1,2,3,4), four distinct components, so any
++  // permutation of the (w,x,y,z) -> (x,y,z,w) remap shows up here.
++  assert(std::abs(splats.rotations[1].x - 0.3651484f) < 1e-5f);
++  assert(std::abs(splats.rotations[1].y - 0.5477226f) < 1e-5f);
++  assert(std::abs(splats.rotations[1].z - 0.7302967f) < 1e-5f);
++  assert(std::abs(splats.rotations[1].w - 0.1825742f) < 1e-5f);
++
+   // Vertex 1: opacity logit -2 -> sigmoid(-2) ~= 0.11920292.
+   assert(std::abs(splats.opacity[1] - 0.11920292f) < 1e-5f);
+ 

@@ -133,6 +133,7 @@ Env knobs (all optional):
 | `EVAL_MODEL` | `sonnet` | top-level model, pinned identically on both arms |
 | `CLAUDE_CODE_SUBAGENT_MODEL` | `sonnet` | default subagent model, pinned identically on both arms |
 | `EVAL_JUDGE_MODEL` | `sonnet` | judge model |
+| `EVAL_JUDGE_EFFORT` | (unset) | `--effort` for the judge call, e.g. `high` |
 | `EVAL_PER_RUN_BUDGET` | `0.50` | passed to `--max-budget-usd` per main run |
 
 ## Cost
@@ -182,13 +183,21 @@ own `CLAUDE.md`. Differences from `unit.sh`:
   same way as a cheap fixture trial would just make it fail partway
   through on the tasks most worth watching closely.
 - **Diffs are committed**, not gitignored: after a run,
-  `eval/case-studies/<task_id>/{vanilla,claudia}.diff` are real, readable
-  copies of what each condition actually produced. `eval/runs/<batch>/`
-  itself stays gitignored like always.
+  `eval/case-studies/<task_id>--<tier>/{vanilla,claudia}.diff` are real,
+  readable copies of what each condition actually produced.
+  `eval/runs/<batch>/` itself stays gitignored like always.
+- **Model/effort tiers, not just vanilla/claudia.** `EVAL_MODEL`/
+  `EVAL_EFFORT` (`--effort low|medium|high|xhigh|max`) select the tier —
+  each tier writes into its own `<task_id>--<model>-<effort>` directory
+  inside the batch, so e.g. a `sonnet-medium` run and an `opus-high` run
+  of the same task coexist in one batch and both show up as separate rows
+  in `latest.md`'s by-task table (`aggregate.py` strips the `--<tier>`
+  suffix to find the task's real category/checklist).
 
 ```sh
-ITALY_REPO=~/projects/italy-rs ./eval/integration.sh   # runs gsplat-resample-01
-./eval/eval.sh eval/runs/<batch>                       # fold the result into latest.md/json
+ITALY_REPO=~/projects/italy-rs ./eval/integration.sh   # sonnet/medium, default
+EVAL_MODEL=opus EVAL_EFFORT=high ./eval/integration.sh # opus/high tier, same task
+./eval/eval.sh eval/runs/<batch>                       # fold either/both into latest.md/json
 ```
 
 ## Output

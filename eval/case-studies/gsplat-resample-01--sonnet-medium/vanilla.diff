@@ -1,0 +1,422 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3993d87..d0401d0 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -123,6 +123,7 @@ add_executable(italy-rs
+   src/io/gsplat_ply_loader.cpp
+   src/convert/voxelize.cpp
+   src/convert/sdf_baker.cpp
++  src/convert/gsplat_resample.cpp
+   src/render/environment.cpp
+   src/render/procedural_sky.cpp
+ )
+@@ -174,3 +175,11 @@ add_executable(gsplat_ply_loader_test tests/gsplat_ply_loader_test.cpp src/io/gs
+ target_include_directories(gsplat_ply_loader_test PRIVATE src)
+ target_link_libraries(gsplat_ply_loader_test PRIVATE glm::glm)
+ add_test(NAME gsplat_ply_loader_test COMMAND gsplat_ply_loader_test)
++
++# Host-side only (no GPU/OptiX needed): tests the mesh->gsplat resampling
++# heuristic (see convert/gsplat_resample.cpp), the mesh-side counterpart to
++# gsplat_ply_loader_test above.
++add_executable(gsplat_resample_test tests/gsplat_resample_test.cpp src/convert/gsplat_resample.cpp)
++target_include_directories(gsplat_resample_test PRIVATE src)
++target_link_libraries(gsplat_resample_test PRIVATE glm::glm)
++add_test(NAME gsplat_resample_test COMMAND gsplat_resample_test)
+diff --git a/src/app/main.cpp b/src/app/main.cpp
+index dd51780..b1c5695 100644
+--- a/src/app/main.cpp
++++ b/src/app/main.cpp
+@@ -20,6 +20,7 @@
+ #include <stb_image_write.h>
+ 
+ #include "app/app_window.h"
++#include "convert/gsplat_resample.h"
+ #include "convert/sdf_baker.h"
+ #include "convert/voxelize.h"
+ #include "core/orbit_camera.h"
+@@ -87,9 +88,16 @@ void dumpFrameIfRequested(const italy::OptixRenderer &renderer, GLFWwindow *wind
+ constexpr int kMinResolution = 8;
+ constexpr int kMaxResolution = 512;
+ 
+-// Gsplat is a distinct load source, not a resampling of the loaded GLB mesh
+-// like Voxel/Sdf are — see rebuildScene()'s dispatch.
+-enum class Representation : int { Mesh, Voxel, Sdf, Gsplat };
++// Splat count is a fundamentally different scale from voxel/SDF grid
++// resolution, so GsplatResample gets its own slider/CLI range rather than
++// reusing kMinResolution/kMaxResolution.
++constexpr int kMinSplatCount = 100;
++constexpr int kMaxSplatCount = 2000000;
++
++// Gsplat is a distinct load source, not a resampling of the loaded GLB mesh —
++// GsplatResample is the resampling, alongside Voxel/Sdf — see
++// rebuildScene()'s dispatch.
++enum class Representation : int { Mesh, Voxel, Sdf, Gsplat, GsplatResample };
+ enum class EnvChoice : int { None, Overcast, Midnight, Noon, Custom, ProceduralSky };
+ 
+ // Everything the UI edits, plus the loaded/resampled assets those edits
+@@ -119,6 +127,10 @@ struct AppState {
+   // thinner than a cell — spokes, cables, thin brackets — to break up into
+   // floating fragments. Voxel occupancy is sparse, so it scales gently too.
+   int resolution = 128;
++  // Target splat budget for Representation::GsplatResample — see
++  // resampleMeshToGsplat()'s doc comment for why this is a budget, not an
++  // exact guarantee.
++  int splatCount = 100000;
+   EnvChoice envChoice = EnvChoice::None;
+   char hdriPathBuf[512] = "";
+   bool groundPlane = true;
+@@ -207,6 +219,10 @@ void rebuildScene(AppState &state, std::unique_ptr<italy::OptixRenderer> &render
+       haveSdf = true;
+       state.statusLine += " -> SDF (" + std::to_string(state.sdfGrid.nx) + "x" + std::to_string(state.sdfGrid.ny) +
+                            "x" + std::to_string(state.sdfGrid.nz) + ")";
++    } else if (state.representation == Representation::GsplatResample) {
++      state.splatAsset = italy::resampleMeshToGsplat(state.meshAsset, state.splatCount);
++      state.haveSplats = true;
++      state.statusLine += " -> resampled (" + std::to_string(state.splatAsset.count()) + " splats)";
+     }
+   }
+ 
+@@ -297,6 +313,16 @@ int main(int argc, char **argv) {
+       }
+       return std::clamp(n, kMinResolution, kMaxResolution);
+     };
++    auto parseSplatCount = [&](const std::string &v) {
++      if (v.empty())
++        return state.splatCount;
++      const int n = std::atoi(v.c_str());
++      if (n < kMinSplatCount || n > kMaxSplatCount) {
++        std::fprintf(stderr, "italy: splat count %d out of range [%d, %d], clamping\n", n, kMinSplatCount,
++                     kMaxSplatCount);
++      }
++      return std::clamp(n, kMinSplatCount, kMaxSplatCount);
++    };
+     auto parseDimension = [&](const std::string &v, int fallback, const char *what) {
+       const int n = std::atoi(v.c_str());
+       if (n < 64 || n > 8192) {
+@@ -311,6 +337,9 @@ int main(int argc, char **argv) {
+     } else if (key == "--sdf") {
+       state.representation = Representation::Sdf;
+       state.resolution = parseResolution(value);
++    } else if (key == "--gsplat-resample") {
++      state.representation = Representation::GsplatResample;
++      state.splatCount = parseSplatCount(value);
+     } else if (key == "--width") {
+       state.renderWidth = parseDimension(value, state.renderWidth, "--width");
+     } else if (key == "--height") {
+@@ -497,8 +526,12 @@ int main(int argc, char **argv) {
+         apply |= ImGui::RadioButton("SDF", reinterpret_cast<int *>(&state.representation), 2);
+         ImGui::SameLine();
+         apply |= ImGui::RadioButton("Gsplat", reinterpret_cast<int *>(&state.representation), 3);
++        ImGui::SameLine();
++        apply |= ImGui::RadioButton("Gsplat Resample", reinterpret_cast<int *>(&state.representation), 4);
+         if (state.representation == Representation::Voxel || state.representation == Representation::Sdf)
+           ImGui::SliderInt("Resolution", &state.resolution, kMinResolution, kMaxResolution);
++        if (state.representation == Representation::GsplatResample)
++          ImGui::SliderInt("Splat count", &state.splatCount, kMinSplatCount, kMaxSplatCount);
+ 
+         if (state.representation == Representation::Gsplat)
+           ImGui::InputText("Gsplat .ply path", state.gsplatPathBuf, sizeof(state.gsplatPathBuf));
+diff --git a/src/convert/gsplat_resample.cpp b/src/convert/gsplat_resample.cpp
+new file mode 100644
+index 0000000..572a350
+--- /dev/null
++++ b/src/convert/gsplat_resample.cpp
+@@ -0,0 +1,179 @@
++#include "convert/gsplat_resample.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdint>
++#include <limits>
++#include <utility>
++#include <vector>
++
++#include <glm/gtc/quaternion.hpp>
++
++namespace italy {
++namespace {
++
++// splitmix64 finalizer: cheap, well-mixed integer hash. Used to derive a
++// deterministic, reproducible in-triangle sample position per splat index
++// without carrying an RNG state around — same output every run for the same
++// mesh/count, which matters for a resampling tool (re-running it shouldn't
++// jitter the result).
++uint64_t hash64(uint64_t x) {
++  x += 0x9e3779b97f4a7c15ULL;
++  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
++  x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
++  return x ^ (x >> 31);
++}
++
++// Two independent-looking floats in [0,1) from one sample index.
++std::pair<float, float> hash2(uint32_t i) {
++  const uint64_t h0 = hash64(static_cast<uint64_t>(i) * 2u);
++  const uint64_t h1 = hash64(static_cast<uint64_t>(i) * 2u + 1u);
++  constexpr double kScale = 1.0 / 18446744073709551616.0; // 2^-64
++  return {static_cast<float>(static_cast<double>(h0) * kScale), static_cast<float>(static_cast<double>(h1) * kScale)};
++}
++
++// Area-preserving barycentric map (Shirley & Chiu): uniform (r1,r2) in
++// [0,1)^2 -> uniform point on the triangle, expressed as barycentric weights.
++glm::vec3 uniformBarycentric(float r1, float r2) {
++  const float su = std::sqrt(r1);
++  return {1.0f - su, su * (1.0f - r2), su * r2};
++}
++
++// Branchless orthonormal basis from a unit normal (Duff, Burgess, Christensen
++// et al., "Building an Orthonormal Basis, Revisited", JCGT 2017) — avoids the
++// classic construction's singularity/precision loss near the poles.
++void buildOnb(const glm::vec3 &n, glm::vec3 &t, glm::vec3 &b) {
++  const float sign = n.z >= 0.0f ? 1.0f : -1.0f;
++  const float a = -1.0f / (sign + n.z);
++  const float c = n.x * n.y * a;
++  t = glm::vec3(1.0f + sign * n.x * n.x * a, sign * c, -sign * n.x);
++  b = glm::vec3(c, sign + n.y * n.y * a, -n.y);
++}
++
++// sRGB (as stored in an 8-bit base-colour texture) -> linear, matching the
++// decode the GPU's texture hardware performs for TextureAsset::srgb textures
++// (see optix_renderer.cpp's uploadTexture) — needed here because sampling
++// happens on the CPU, outside that hardware path.
++float srgbToLinear(float c) { return std::pow(c, 2.2f); }
++
++glm::vec3 sampleBaseColor(const MeshAsset &mesh, const MaterialAsset &mat, glm::vec2 uv) {
++  glm::vec3 color = mat.baseColorFactor;
++  if (mat.baseColorTexture < 0 || mat.baseColorTexture >= static_cast<int>(mesh.textures.size()))
++    return color;
++  const TextureAsset &tex = mesh.textures[mat.baseColorTexture];
++  if (tex.width <= 0 || tex.height <= 0)
++    return color;
++  float u = uv.x - std::floor(uv.x);
++  float v = uv.y - std::floor(uv.y);
++  const int px = std::clamp(static_cast<int>(u * tex.width), 0, tex.width - 1);
++  const int py = std::clamp(static_cast<int>(v * tex.height), 0, tex.height - 1);
++  const size_t idx = (static_cast<size_t>(py) * tex.width + px) * 4;
++  glm::vec3 texel(tex.pixelsRGBA[idx] / 255.0f, tex.pixelsRGBA[idx + 1] / 255.0f, tex.pixelsRGBA[idx + 2] / 255.0f);
++  if (tex.srgb)
++    texel = glm::vec3(srgbToLinear(texel.x), srgbToLinear(texel.y), srgbToLinear(texel.z));
++  return color * texel;
++}
++
++} // namespace
++
++GsplatAsset resampleMeshToGsplat(const MeshAsset &mesh, int targetSplatCount) {
++  GsplatAsset out;
++  out.boundsMin = mesh.boundsMin;
++  out.boundsMax = mesh.boundsMax;
++
++  const size_t triangleCount = mesh.triangleCount();
++  const int sampleCount = std::max(0, targetSplatCount);
++  if (triangleCount == 0 || sampleCount == 0)
++    return out;
++
++  // Per-triangle area and its running total, for area-weighted sampling.
++  std::vector<float> cumulativeArea(triangleCount);
++  float totalArea = 0.0f;
++  for (size_t t = 0; t < triangleCount; ++t) {
++    const glm::vec3 &p0 = mesh.positions[3 * t + 0];
++    const glm::vec3 &p1 = mesh.positions[3 * t + 1];
++    const glm::vec3 &p2 = mesh.positions[3 * t + 2];
++    totalArea += 0.5f * glm::length(glm::cross(p1 - p0, p2 - p0));
++    cumulativeArea[t] = totalArea;
++  }
++  if (totalArea <= 0.0f)
++    return out;
++
++  // Deterministic systematic resampling over the cumulative-area
++  // distribution (same technique as particle-filter systematic resampling,
++  // with a fixed offset instead of a random one) — gives each sample slot a
++  // triangle proportional to its area, whether the splat budget is above or
++  // below the triangle count.
++  std::vector<uint32_t> sampleTriangle(sampleCount);
++  std::vector<uint32_t> samplesInTriangle(triangleCount, 0);
++  for (int i = 0; i < sampleCount; ++i) {
++    const float u = (static_cast<float>(i) + 0.5f) / static_cast<float>(sampleCount) * totalArea;
++    const auto it = std::lower_bound(cumulativeArea.begin(), cumulativeArea.end(), u);
++    const size_t tri = std::min(static_cast<size_t>(it - cumulativeArea.begin()), triangleCount - 1);
++    sampleTriangle[i] = static_cast<uint32_t>(tri);
++    ++samplesInTriangle[tri];
++  }
++
++  out.positions.resize(sampleCount);
++  out.scales.resize(sampleCount);
++  out.rotations.resize(sampleCount);
++  out.opacity.resize(sampleCount);
++  out.colorDC.resize(sampleCount);
++
++  glm::vec3 minPos(std::numeric_limits<float>::max());
++  glm::vec3 maxPos(std::numeric_limits<float>::lowest());
++
++  for (int i = 0; i < sampleCount; ++i) {
++    const uint32_t tri = sampleTriangle[i];
++    const glm::vec3 &p0 = mesh.positions[3 * tri + 0];
++    const glm::vec3 &p1 = mesh.positions[3 * tri + 1];
++    const glm::vec3 &p2 = mesh.positions[3 * tri + 2];
++    const glm::vec3 &n0 = mesh.normals[3 * tri + 0];
++    const glm::vec3 &n1 = mesh.normals[3 * tri + 1];
++    const glm::vec3 &n2 = mesh.normals[3 * tri + 2];
++
++    const auto [r1, r2] = hash2(static_cast<uint32_t>(i));
++    const glm::vec3 bary = uniformBarycentric(r1, r2);
++
++    const glm::vec3 position = bary.x * p0 + bary.y * p1 + bary.z * p2;
++    glm::vec3 normal = bary.x * n0 + bary.y * n1 + bary.z * n2;
++    if (glm::dot(normal, normal) < 1e-12f)
++      normal = glm::vec3(0.0f, 0.0f, 1.0f);
++    else
++      normal = glm::normalize(normal);
++
++    glm::vec3 tangent, bitangent;
++    buildOnb(normal, tangent, bitangent);
++    const glm::mat3 basis(tangent, bitangent, normal);
++    const glm::quat q = glm::quat_cast(basis);
++
++    const float triangleArea = (tri == 0) ? cumulativeArea[0] : (cumulativeArea[tri] - cumulativeArea[tri - 1]);
++    const float spacing = std::sqrt(triangleArea / static_cast<float>(std::max(1u, samplesInTriangle[tri])));
++    const float inPlaneRadius = spacing * 0.5f;
++    const float thinRadius = std::max(spacing * 0.08f, 1e-5f);
++
++    const MaterialAsset &mat = mesh.materialForTriangle(tri);
++    glm::vec2 uv(0.0f);
++    if (!mesh.uvs.empty()) {
++      const glm::vec2 &uv0 = mesh.uvs[3 * tri + 0];
++      const glm::vec2 &uv1 = mesh.uvs[3 * tri + 1];
++      const glm::vec2 &uv2 = mesh.uvs[3 * tri + 2];
++      uv = bary.x * uv0 + bary.y * uv1 + bary.z * uv2;
++    }
++
++    out.positions[i] = position;
++    out.scales[i] = glm::vec3(inPlaneRadius, inPlaneRadius, thinRadius);
++    out.rotations[i] = glm::vec4(q.x, q.y, q.z, q.w);
++    out.opacity[i] = 1.0f - std::clamp(mat.transmission, 0.0f, 0.95f);
++    out.colorDC[i] = glm::clamp(sampleBaseColor(mesh, mat, uv), glm::vec3(0.0f), glm::vec3(1.0f));
++
++    minPos = glm::min(minPos, position);
++    maxPos = glm::max(maxPos, position);
++  }
++
++  out.boundsMin = minPos;
++  out.boundsMax = maxPos;
++  return out;
++}
++
++} // namespace italy
+diff --git a/src/convert/gsplat_resample.h b/src/convert/gsplat_resample.h
+new file mode 100644
+index 0000000..73a622d
+--- /dev/null
++++ b/src/convert/gsplat_resample.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#include "io/gsplat_asset.h"
++#include "io/mesh_asset.h"
++
++namespace italy {
++
++// Mesh -> Gaussian-splat resampling (roadmap item explicitly deferred until
++// now — see humans.md's "Gaussian-splat resampling" note). Not trained/fit
++// splats: a geometric heuristic that scatters oriented, flat, disk-shaped
++// Gaussians over the mesh surface, area-weighted so triangle size doesn't
++// bias density, colored/opacity-derived from each triangle's material.
++// `targetSplatCount` is a budget, not a guarantee — the actual count matches
++// it closely but can differ slightly due to rounding in the area-weighted
++// sampling. Returns an empty (but bounds-set) GsplatAsset for a triangle-less
++// mesh.
++GsplatAsset resampleMeshToGsplat(const MeshAsset &mesh, int targetSplatCount);
++
++} // namespace italy
+diff --git a/tests/gsplat_resample_test.cpp b/tests/gsplat_resample_test.cpp
+new file mode 100644
+index 0000000..5096a74
+--- /dev/null
++++ b/tests/gsplat_resample_test.cpp
+@@ -0,0 +1,88 @@
++// Standalone sanity check for the mesh->gsplat resampling heuristic — no
++// framework, just asserts, matching this repo's tool-scale. Run via the
++// `gsplat_resample_test` CMake target.
++#include <cassert>
++#include <cmath>
++#include <cstdio>
++
++#include "convert/gsplat_resample.h"
++
++using italy::GsplatAsset;
++using italy::MaterialAsset;
++using italy::MeshAsset;
++using italy::resampleMeshToGsplat;
++
++namespace {
++
++void addQuad(MeshAsset &mesh, glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, glm::vec3 n) {
++  for (glm::vec3 v : {a, b, c, a, c, d}) {
++    mesh.positions.push_back(v);
++    mesh.normals.push_back(n);
++    mesh.uvs.push_back(glm::vec2(0));
++  }
++}
++
++MeshAsset makeUnitCubeShell() {
++  MeshAsset mesh;
++  const glm::vec3 lo(0, 0, 0), hi(1, 1, 1);
++  addQuad(mesh, {lo.x, lo.y, lo.z}, {hi.x, lo.y, lo.z}, {hi.x, hi.y, lo.z}, {lo.x, hi.y, lo.z}, {0, 0, -1});
++  addQuad(mesh, {lo.x, lo.y, hi.z}, {lo.x, hi.y, hi.z}, {hi.x, hi.y, hi.z}, {hi.x, lo.y, hi.z}, {0, 0, 1});
++  addQuad(mesh, {lo.x, lo.y, lo.z}, {lo.x, hi.y, lo.z}, {lo.x, hi.y, hi.z}, {lo.x, lo.y, hi.z}, {-1, 0, 0});
++  addQuad(mesh, {hi.x, lo.y, lo.z}, {hi.x, lo.y, hi.z}, {hi.x, hi.y, hi.z}, {hi.x, hi.y, lo.z}, {1, 0, 0});
++  addQuad(mesh, {lo.x, lo.y, lo.z}, {lo.x, lo.y, hi.z}, {hi.x, lo.y, hi.z}, {hi.x, lo.y, lo.z}, {0, -1, 0});
++  addQuad(mesh, {lo.x, hi.y, lo.z}, {hi.x, hi.y, lo.z}, {hi.x, hi.y, hi.z}, {lo.x, hi.y, hi.z}, {0, 1, 0});
++  mesh.boundsMin = lo;
++  mesh.boundsMax = hi;
++  MaterialAsset mat;
++  mat.baseColorFactor = glm::vec3(0.2f, 0.4f, 0.8f);
++  mesh.materials.push_back(mat);
++  return mesh;
++}
++
++} // namespace
++
++int main() {
++  const MeshAsset cube = makeUnitCubeShell();
++  const int target = 5000;
++  const GsplatAsset splats = resampleMeshToGsplat(cube, target);
++
++  // Systematic resampling should hit the requested budget close to exactly.
++  assert(splats.count() == static_cast<size_t>(target));
++
++  for (size_t i = 0; i < splats.count(); ++i) {
++    const glm::vec3 &p = splats.positions[i];
++    assert(p.x >= -1e-4f && p.x <= 1.0f + 1e-4f);
++    assert(p.y >= -1e-4f && p.y <= 1.0f + 1e-4f);
++    assert(p.z >= -1e-4f && p.z <= 1.0f + 1e-4f);
++
++    const glm::vec3 &s = splats.scales[i];
++    assert(std::isfinite(s.x) && std::isfinite(s.y) && std::isfinite(s.z));
++    assert(s.x > 0.0f && s.y > 0.0f && s.z > 0.0f);
++
++    const glm::vec4 &r = splats.rotations[i];
++    const float len = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
++    assert(std::fabs(len - 1.0f) < 1e-3f);
++
++    assert(splats.opacity[i] > 0.0f && splats.opacity[i] <= 1.0f);
++
++    const glm::vec3 &c = splats.colorDC[i];
++    assert(c.x >= 0.0f && c.x <= 1.0f && c.y >= 0.0f && c.y <= 1.0f && c.z >= 0.0f && c.z <= 1.0f);
++  }
++
++  // Bounds should tightly enclose the generated positions.
++  glm::vec3 minP(1e30f), maxP(-1e30f);
++  for (const glm::vec3 &p : splats.positions) {
++    minP = glm::min(minP, p);
++    maxP = glm::max(maxP, p);
++  }
++  assert(glm::all(glm::lessThanEqual(glm::abs(splats.boundsMin - minP), glm::vec3(1e-5f))));
++  assert(glm::all(glm::lessThanEqual(glm::abs(splats.boundsMax - maxP), glm::vec3(1e-5f))));
++
++  // Empty mesh -> empty (but not crashing) result.
++  const MeshAsset empty;
++  const GsplatAsset emptySplats = resampleMeshToGsplat(empty, 1000);
++  assert(emptySplats.count() == 0);
++
++  std::printf("gsplat_resample_test passed (%zu splats)\n", splats.count());
++  return 0;
++}

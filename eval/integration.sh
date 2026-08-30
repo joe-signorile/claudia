@@ -8,13 +8,21 @@
 # same way a human would drive it.
 #
 # No budget cap (deliberately — this is a single deep case study, not a
-# statistical corpus entry averaged over cheap trials) and no --resume:
-# a failed run means removing the worktree/branch this script printed at
-# the end and re-running.
+# statistical corpus entry averaged over cheap trials).
+#
+# --batch <name> targets an existing eval/runs/ batch instead of starting
+# a new one (used by eval/run.sh to fold multiple tiers into one batch),
+# and doubles as resume: a condition whose run_dir is already complete+
+# valid (per eval/lib/run_status.py — same check unit.sh's --resume uses)
+# is skipped, worktree and all. A condition that's present but incomplete
+# (a prior crash) gets its stale worktree/branch torn down and redone.
+# The judge call at the end is never cached — always fresh.
 #
 # Usage:
-#   ./eval/integration.sh                        # runs gsplat-resample-01
+#   ./eval/integration.sh                        # runs gsplat-resample-01, sonnet/medium
+#   EVAL_MODEL=opus EVAL_EFFORT=high ./eval/integration.sh   # the opus/high tier
 #   ./eval/integration.sh --task foo-01           # a different eval/tasks/ task
+#   ./eval/integration.sh --batch 20260829T152616Z  # target/resume a batch
 #   ITALY_REPO=/path/to/italy-rs ./eval/integration.sh
 #   EVAL_BASE_BRANCH=claudia-integration-eval ./eval/integration.sh   # default
 #
@@ -22,8 +30,15 @@
 # a dedicated, remote-pushed branch so the eval has a stable, known-good
 # anchor point independent of whatever master does next.
 #
-# Writes into the same $BATCH_DIR/<task_id>/<condition>/1/ shape as
-# eval/unit.sh, so eval/eval.sh can aggregate+report either or both.
+# Each (model, effort) tier gets its own task-id directory
+# (<task_id>--<model>-<effort>) so running both the sonnet/medium and
+# opus/high tiers writes side by side in the same batch without
+# clobbering each other — aggregate.py strips the "--<tier>" suffix to
+# find the underlying task file's category/checklist.
+#
+# Writes into $BATCH_DIR/<task_id>--<tier>/<condition>/1/ — same shape as
+# eval/unit.sh (just a longer task-id folder name), so eval/eval.sh can
+# aggregate+report either or both.
 set -eu
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,15 +47,21 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 : "${ITALY_REPO:=$HOME/projects/italy-rs}"
 : "${EVAL_BASE_BRANCH:=claudia-integration-eval}"
 : "${EVAL_MODEL:=sonnet}"
+: "${EVAL_EFFORT:=medium}"
 : "${CLAUDE_CODE_SUBAGENT_MODEL:=sonnet}"
 : "${EVAL_JUDGE_MODEL:=sonnet}"
+: "${EVAL_JUDGE_EFFORT:=high}"
 : "${EVAL_CONDITIONS:=vanilla,claudia}"
 export CLAUDE_CODE_SUBAGENT_MODEL
 
+TIER="${EVAL_MODEL}-${EVAL_EFFORT}"
+
 TASK_ID="gsplat-resample-01"
+BATCH=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --task) shift; TASK_ID="$1" ;;
+    --batch) shift; BATCH="$1" ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
   shift
@@ -51,7 +72,7 @@ task_file="$REPO_DIR/eval/tasks/$TASK_ID.md"
 [ -f "$task_file" ] || { echo "no such task file: $task_file" >&2; exit 1; }
 command -v uuidgen >/dev/null 2>&1 || { echo "uuidgen required (session-id for the plan/execute resume)" >&2; exit 1; }
 
-BATCH="$(date -u +%Y%m%dT%H%M%SZ)"
+[ -n "$BATCH" ] || BATCH="$(date -u +%Y%m%dT%H%M%SZ)"
 BATCH_DIR="$REPO_DIR/eval/runs/$BATCH"
 mkdir -p "$BATCH_DIR"
 echo "Batch: $BATCH_DIR"
@@ -71,11 +92,25 @@ echo "Branch point: $EVAL_BASE_BRANCH @ $base_ref"
 run_condition() {
   # run_condition <condition>
   condition="$1"
-  branch="eval/${TASK_ID}-${condition}"
-  worktree_dir="$ITALY_REPO/.claude/worktrees/eval-${TASK_ID}-${condition}"
-  run_dir="$BATCH_DIR/$TASK_ID/$condition/1"
-  mkdir -p "$run_dir"
+  branch="eval/${TASK_ID}-${TIER}-${condition}"
+  worktree_dir="$ITALY_REPO/.claude/worktrees/eval-${TASK_ID}-${TIER}-${condition}"
+  run_dir="$BATCH_DIR/${TASK_ID}--${TIER}/$condition/1"
 
+  if python3 "$REPO_DIR/eval/lib/run_status.py" run "$run_dir" >/dev/null 2>&1; then
+    echo "  [$condition] already complete, skipping"
+    return 0
+  fi
+
+  # A prior incomplete attempt may have left a worktree/branch behind —
+  # tear it down so worktree add below starts clean.
+  if git -C "$ITALY_REPO" worktree list --porcelain | grep -qx "worktree $worktree_dir"; then
+    git -C "$ITALY_REPO" worktree remove --force "$worktree_dir"
+  fi
+  if git -C "$ITALY_REPO" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$ITALY_REPO" branch -D "$branch" >/dev/null
+  fi
+
+  mkdir -p "$run_dir"
   git -C "$ITALY_REPO" worktree add -b "$branch" "$worktree_dir" "$EVAL_BASE_BRANCH"
 
   sandbox="$(make_sandbox)"
@@ -91,7 +126,7 @@ run_condition() {
     ( cd "$worktree_dir" && \
       CLAUDE_CONFIG_DIR="$config_dir" HOME="$sandbox/home" \
       claude -p "$prompt" \
-        --model "$EVAL_MODEL" --session-id "$sid" \
+        --model "$EVAL_MODEL" --effort "$EVAL_EFFORT" --session-id "$sid" \
         --output-format stream-json --verbose --forward-subagent-text \
         --permission-mode plan \
     ) > "$run_dir/plan.ndjson" 2> "$run_dir/plan.stderr.log"
@@ -101,7 +136,7 @@ run_condition() {
     ( cd "$worktree_dir" && \
       CLAUDE_CONFIG_DIR="$config_dir" HOME="$sandbox/home" \
       claude -p "$prompt" \
-        --model "$EVAL_MODEL" --session-id "$sid" \
+        --model "$EVAL_MODEL" --effort "$EVAL_EFFORT" --session-id "$sid" \
         --output-format stream-json --verbose --forward-subagent-text \
         --permission-mode plan --setting-sources "" \
     ) > "$run_dir/plan.ndjson" 2> "$run_dir/plan.stderr.log"
@@ -112,7 +147,7 @@ run_condition() {
     ( cd "$worktree_dir" && \
       CLAUDE_CONFIG_DIR="$config_dir" HOME="$sandbox/home" \
       claude -p "Proceed with the plan." \
-        --model "$EVAL_MODEL" --resume "$sid" \
+        --model "$EVAL_MODEL" --effort "$EVAL_EFFORT" --resume "$sid" \
         --output-format stream-json --verbose --forward-subagent-text \
         --permission-mode bypassPermissions \
     ) > "$run_dir/execute.ndjson" 2> "$run_dir/execute.stderr.log"
@@ -120,7 +155,7 @@ run_condition() {
     ( cd "$worktree_dir" && \
       CLAUDE_CONFIG_DIR="$config_dir" HOME="$sandbox/home" \
       claude -p "Proceed with the plan." \
-        --model "$EVAL_MODEL" --resume "$sid" \
+        --model "$EVAL_MODEL" --effort "$EVAL_EFFORT" --resume "$sid" \
         --output-format stream-json --verbose --forward-subagent-text \
         --permission-mode bypassPermissions --setting-sources "" \
     ) > "$run_dir/execute.ndjson" 2> "$run_dir/execute.stderr.log"
@@ -146,22 +181,23 @@ run_condition() {
   set -e
 }
 
-echo "== $TASK_ID =="
+echo "== $TASK_ID ($TIER) =="
 branches=""
 for condition in $(echo "$EVAL_CONDITIONS" | tr ',' ' '); do
   echo "-- $condition --"
   run_condition "$condition"
-  branches="$branches $condition:eval/${TASK_ID}-${condition}"
+  branches="$branches $condition:eval/${TASK_ID}-${TIER}-${condition}"
 done
 
-vanilla_summary="$BATCH_DIR/$TASK_ID/vanilla/1/summary.json"
-claudia_summary="$BATCH_DIR/$TASK_ID/claudia/1/summary.json"
+task_dir_name="${TASK_ID}--${TIER}"
+vanilla_summary="$BATCH_DIR/$task_dir_name/vanilla/1/summary.json"
+claudia_summary="$BATCH_DIR/$task_dir_name/claudia/1/summary.json"
 if [ -f "$vanilla_summary" ] && [ -f "$claudia_summary" ]; then
   echo "Judging..."
-  judge_dir="$BATCH_DIR/$TASK_ID/judge"
+  judge_dir="$BATCH_DIR/$task_dir_name/judge"
   mkdir -p "$judge_dir"
   set +e
-  python3 "$REPO_DIR/eval/judge/judge.py" "$task_file" "$vanilla_summary" "$claudia_summary" "$EVAL_JUDGE_MODEL" \
+  python3 "$REPO_DIR/eval/judge/judge.py" "$task_file" "$vanilla_summary" "$claudia_summary" "$EVAL_JUDGE_MODEL" "$EVAL_JUDGE_EFFORT" \
     > "$judge_dir/1.json.tmp" 2> "$judge_dir/1.stderr.log"
   status=$?
   set -e
@@ -174,10 +210,10 @@ if [ -f "$vanilla_summary" ] && [ -f "$claudia_summary" ]; then
 fi
 
 # Committed, human-readable copies — eval/runs/ is gitignored, this isn't.
-case_dir="$REPO_DIR/eval/case-studies/$TASK_ID"
+case_dir="$REPO_DIR/eval/case-studies/$task_dir_name"
 mkdir -p "$case_dir"
 for condition in vanilla claudia; do
-  src="$BATCH_DIR/$TASK_ID/$condition/1/diff.patch"
+  src="$BATCH_DIR/$task_dir_name/$condition/1/diff.patch"
   [ -f "$src" ] && cp "$src" "$case_dir/$condition.diff"
 done
 
@@ -187,5 +223,5 @@ echo "Branches created in $ITALY_REPO:$branches"
 echo "Aggregate + report: EVAL_TRIALS=1 ./eval/eval.sh $BATCH_DIR"
 echo "Cleanup when done inspecting (from $ITALY_REPO):"
 for condition in $(echo "$EVAL_CONDITIONS" | tr ',' ' '); do
-  echo "  git worktree remove .claude/worktrees/eval-${TASK_ID}-${condition} && git branch -D eval/${TASK_ID}-${condition}"
+  echo "  git worktree remove .claude/worktrees/eval-${TASK_ID}-${TIER}-${condition} && git branch -D eval/${TASK_ID}-${TIER}-${condition}"
 done

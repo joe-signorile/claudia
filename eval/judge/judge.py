@@ -8,7 +8,7 @@ B", asks a fresh `claude -p` call (no shared context with the runs being
 judged) to grade both against the task's checklist, then re-maps the
 anonymized labels back to the real condition names before writing output.
 
-Usage: judge.py <task-file> <vanilla-summary.json> <claudia-summary.json> <judge-model>
+Usage: judge.py <task-file> <vanilla-summary.json> <claudia-summary.json> <judge-model> [<judge-effort>]
 Prints {"vanilla": {...}, "claudia": {...}} JSON to stdout.
 """
 import json
@@ -71,6 +71,7 @@ def extract_verdict(stdout):
 
 def main():
     task_file, vanilla_path, claudia_path, judge_model = sys.argv[1:5]
+    judge_effort = sys.argv[5] if len(sys.argv) > 5 else None
     task, prompt_body = parse(task_file)
     checklist = task.get("checklist", [])
 
@@ -97,8 +98,11 @@ def main():
         f"# Responses\n{sections}\n"
     )
 
+    cmd = ["claude", "-p", judge_prompt, "--model", judge_model, "--output-format", "json"]
+    if judge_effort:
+        cmd += ["--effort", judge_effort]
     result = subprocess.run(
-        ["claude", "-p", judge_prompt, "--model", judge_model, "--output-format", "json"],
+        cmd,
         capture_output=True,
         text=True,
         check=True,
