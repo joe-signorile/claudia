@@ -186,13 +186,33 @@ for task_file in $TASK_FILES; do
   [ -f "$task_file" ] || { echo "no such task file: $task_file" >&2; exit 1; }
   task_id="$(basename "$task_file" .md)"
   fixture="$(awk '/^---$/{c++; next} c==1 && /^fixture:/{print $2; exit}' "$task_file")"
+
+  # Integration-only tasks (e.g. gsplat-resample-01, whose "fixture" is the
+  # real italy-rs repo, not something under eval/fixtures/) don't belong to
+  # unit.sh's throwaway-repo model — running one anyway leaves the sandbox
+  # repo empty/non-git (fixtures.sh correctly refuses) and produces a
+  # meaningless score, not a missing one. Skip, don't fake a fixture.
+  if [ ! -d "$REPO_DIR/eval/fixtures/$fixture" ]; then
+    echo "== $task_id: skipping, no eval/fixtures/$fixture (integration-only task — use eval/integration.sh) =="
+    continue
+  fi
+
+  # Per-task trial count: a task may declare `trials: N` in frontmatter to
+  # opt out of the default. Saturated regression-guard tasks — both arms
+  # scoring 100% on every trial — declare 1, because repeating a run whose
+  # outcome never varies buys no signal, only spend. EVAL_TRIALS stays a
+  # global ceiling, so --smoke and cheap partial runs still cap everything.
+  task_trials="$(awk '/^---$/{c++; next} c==1 && /^trials:/{print $2; exit}' "$task_file")"
+  [ -n "$task_trials" ] || task_trials="$EVAL_TRIALS"
+  [ "$task_trials" -le "$EVAL_TRIALS" ] || task_trials="$EVAL_TRIALS"
+
   prompt_file="$(mktemp)"
   awk '/^---$/{c++; next} c>=2' "$task_file" > "$prompt_file"
 
-  echo "== $task_id (fixture: $fixture) =="
+  echo "== $task_id (fixture: $fixture, trials: $task_trials) =="
 
   trial=1
-  while [ "$trial" -le "$EVAL_TRIALS" ]; do
+  while [ "$trial" -le "$task_trials" ]; do
     for condition in $(echo "$EVAL_CONDITIONS" | tr ',' ' '); do
       run_dir="$BATCH_DIR/$task_id/$condition/$trial"
       if run_is_cached "$run_dir"; then

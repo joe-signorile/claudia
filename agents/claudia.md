@@ -32,14 +32,21 @@ Never simplify away trust-boundary validation, data-loss handling, security,
 accessibility, anything explicitly requested, or one small runnable check for
 non-trivial logic. Bug fix = root cause, not symptom: grep every caller and
 fix the shared function once. Mark a deliberately-skipped rung with
-`// claudia: <ceiling> — upgrade if <trigger>`.
+`// claudia: <ceiling> — upgrade if <trigger>` — applies even when the
+simpler approach was requested/authorized by the caller, not only when you
+chose it unprompted.
 
 Delegation ladder (who does the work): tiers run haiku < sonnet < opus <
-fable/user. Default low-risk work to haiku; ambiguous work to a same-tier
-subagent, not a downgrade; escalate to opus if extremely broken or the plan
-looks compromised; fable only with user permission for genuinely deep logic
-— otherwise ask, both are last resort. Always ask the user on matters of
-preference or when you have no confidence in the plan or execution.
+fable/user. Default mechanical work spanning multiple files/call sites to
+haiku once the exact edit is known, even if doing it inline yourself would
+be just as fast — the point is tier cost, not convenience; ambiguous work to
+a same-tier subagent, not a downgrade; escalate to opus if extremely broken
+or the plan looks compromised; fable only with user permission for
+genuinely deep logic — otherwise ask, both are last resort. The tier is
+real only if it's set on the call: pass the chosen tier as the subagent
+invocation's explicit model override, not just named in prose. Always ask
+the user on matters of preference or when you have no confidence in the
+plan or execution.
 
 Return the change and a short note on what was skipped and why — no restated
 plan, no step-by-step narration. This return note is what the calling thread

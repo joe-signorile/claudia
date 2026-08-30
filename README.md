@@ -4,16 +4,6 @@
 
 > Minimalism-first persona for Claude Code.
 
-<!-- claudia:results:start -->
-<!-- claudia:results:delta=0.33333333333333337 -->
-## Results
-
-Claudia's minimalism/safety/delegation checklist pass-rate beat stock Claude Code by 33pp (50% -> 83%) across 16 tasks, 5 trials each, both pinned to `sonnet`. Judge is Claude itself — see [eval/README.md](eval/README.md#self-bias) for that caveat and full methodology, plus how to reproduce this run yourself.
-
-_Last measured: 2026-08-30._
-<!-- claudia:results:end -->
-
-
 A YAGNI ladder that runs before any code is written, plus a dry/deadpan voice
 layer on top. It installs as user-level files under `~/.claude/`, so it applies
 across every project with no per-repo setup. A personal tool, published as-is:

@@ -20,6 +20,30 @@ from frontmatter import parse  # noqa: E402
 
 REPO_DIR = Path(__file__).parent.parent
 TASKS_DIR = REPO_DIR / "eval" / "tasks"
+FIXTURES_DIR = REPO_DIR / "eval" / "fixtures"
+
+
+def task_kind(meta):
+    """Which of the two experiments a task belongs to.
+
+    These are not comparable and must never share a headline mean: a
+    fixture task is a toy repo averaged over several trials, while a
+    case study is one trial against a real repo carrying ~40,000x the
+    cache-read volume. An unweighted mean-per-task across both lets two
+    n=1 runs dominate a 65-run corpus (measured: the combined +1.6pp/+55%
+    headline was almost entirely the two case studies, while the fixture
+    corpus alone was -0.8pp/+11%).
+
+    A task whose `fixture:` doesn't resolve to a directory under
+    eval/fixtures/ is a real-repo case study driven by eval/integration.sh
+    — its "fixture" names an external repo (e.g. italy-rs). That's the
+    same structural signal eval/unit.sh uses to skip those tasks, kept
+    derived rather than a hand-maintained list so adding a case study
+    can't forget to update it."""
+    fixture = (meta.get("fixture") or "").strip()
+    if not fixture:
+        return "fixture"
+    return "fixture" if (FIXTURES_DIR / fixture).is_dir() else "case-study"
 
 
 def safe_json(path):
@@ -53,10 +77,24 @@ def activation_ok(condition, task_dir, trial):
     return bool(activation and activation.get("activation_ok"))
 
 
+def final_response_ok(condition, task_dir, trial):
+    """False if summary.json's final_response is missing/blank — e.g. a
+    sandbox seeding hiccup (missing .claude.json) that still exits 0 with
+    well-formed JSON but never actually answered. Indistinguishable from a
+    genuine quality loss unless caught here, so it must not silently score
+    as one."""
+    summary = safe_json(task_dir / condition / str(trial) / "summary.json")
+    return bool(summary and str(summary.get("final_response") or "").strip())
+
+
 def run_valid(condition, task_dir, trial):
-    """A run only counts toward scoring if it both completed (exit 0) and
-    had the config it was supposed to have."""
-    return exit_code_ok(condition, task_dir, trial) and activation_ok(condition, task_dir, trial)
+    """A run only counts toward scoring if it completed (exit 0), had the
+    config it was supposed to have, and actually produced an answer."""
+    return (
+        exit_code_ok(condition, task_dir, trial)
+        and activation_ok(condition, task_dir, trial)
+        and final_response_ok(condition, task_dir, trial)
+    )
 
 
 TOKEN_FIELDS = (
@@ -125,9 +163,11 @@ def main():
         base_task_id = task_id.split("--", 1)[0]
         task_file = TASKS_DIR / f"{base_task_id}.md"
         category = "unknown"
+        kind = "fixture"
         if task_file.exists():
             meta, _ = parse(task_file)
             category = meta.get("category", "unknown")
+            kind = task_kind(meta)
         category_of[task_id] = category
 
         task_scores = {"vanilla": [], "claudia": []}
@@ -154,6 +194,7 @@ def main():
 
         by_task[task_id] = {
             "category": category,
+            "kind": kind,
             "vanilla": mean(task_scores["vanilla"]),
             "claudia": mean(task_scores["claudia"]),
             "trials": max(len(task_scores["vanilla"]), len(task_scores["claudia"])),
@@ -176,6 +217,33 @@ def main():
         for cat, v in by_category.items()
     }
 
+    # Per-experiment rollup — the number anything downstream should quote.
+    # Same mean-of-per-task-means methodology as the combined aggregate,
+    # just never mixing the two kinds. See task_kind() for why.
+    by_kind = {}
+    for kind in sorted({t["kind"] for t in by_task.values()}):
+        ids = [tid for tid, t in by_task.items() if t["kind"] == kind]
+        kv = mean([by_task[i]["vanilla"] for i in ids if by_task[i]["vanilla"] is not None])
+        kc = mean([by_task[i]["claudia"] for i in ids if by_task[i]["claudia"] is not None])
+        by_kind[kind] = {
+            "task_count": len(ids),
+            "runs_per_condition": sum(by_task[i]["trials"] for i in ids),
+            "vanilla": kv,
+            "claudia": kc,
+            "delta": (kc - kv) if kv is not None and kc is not None else None,
+            "tokens": {
+                condition: {
+                    field: mean([
+                        by_task[i]["tokens"][condition][field]
+                        for i in ids
+                        if by_task[i]["tokens"][condition][field] is not None
+                    ])
+                    for field in TOKEN_FIELDS
+                }
+                for condition in ("vanilla", "claudia")
+            },
+        }
+
     task_vanilla = [t["vanilla"] for t in by_task.values() if t["vanilla"] is not None]
     task_claudia = [t["claudia"] for t in by_task.values() if t["claudia"] is not None]
     aggregate = {"vanilla": mean(task_vanilla), "claudia": mean(task_claudia)}
@@ -183,6 +251,25 @@ def main():
         aggregate["claudia"] - aggregate["vanilla"]
         if aggregate["vanilla"] is not None and aggregate["claudia"] is not None
         else None
+    )
+
+    # Corpus coverage: how much of the actual task corpus this aggregate is
+    # built on, not just how many task-id directories happen to exist in
+    # the batch. A batch that's mostly rate-limit failures can still leave
+    # one lone valid task producing a real (if meaningless) delta — the
+    # aggregate/delta above can't tell "16 tasks, full data" from "1 task
+    # out of 16 had any data at all" without this. propagate_readme.py
+    # gates on it before publishing anything.
+    corpus_task_ids = {p.stem for p in TASKS_DIR.glob("*.md")}
+    valid_base_task_ids = {
+        task_id.split("--", 1)[0]
+        for task_id, t in by_task.items()
+        if t["vanilla"] is not None and t["claudia"] is not None
+    }
+    coverage = (
+        len(valid_base_task_ids & corpus_task_ids) / len(corpus_task_ids)
+        if corpus_task_ids
+        else 0.0
     )
 
     # Token/cost aggregate: mean-of-per-task-means, same methodology as the
@@ -207,7 +294,11 @@ def main():
         "tasks_run": len(by_task),
         "aggregate": aggregate,
         "delta": delta,
+        "corpus_size": len(corpus_task_ids),
+        "valid_task_count": len(valid_base_task_ids & corpus_task_ids),
+        "coverage": coverage,
         "by_category": by_category_avg,
+        "by_kind": by_kind,
         "by_task": by_task,
         "activation_failures": activation_failures,
         "activation_total": activation_total,

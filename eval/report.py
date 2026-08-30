@@ -20,6 +20,12 @@ def usd(x):
     return "n/a" if x is None else f"${x:.4f}"
 
 
+def pp(x):
+    """A quality delta in percentage points (not a % change — these are
+    already percentages, so a ratio would be meaningless)."""
+    return "n/a" if x is None else f"{x * 100:+.0f}pp"
+
+
 def delta_pct(vanilla, claudia):
     """claudia vs vanilla, as a signed % change. None if either side is
     missing or vanilla is 0 (can't take a % change from zero)."""
@@ -37,13 +43,79 @@ def main():
     lines = []
     lines.append("# claudia eval results (latest run)")
     lines.append("")
-    lines.append(
-        f"Checklist pass-rate: **claudia {pct(agg['claudia'])}** vs "
-        f"**vanilla {pct(agg['vanilla'])}** ({delta_str}), "
-        f"{data['tasks_run']} tasks x {data['trials_per_task_per_condition']} trials, "
-        f"both pinned to `{data['model']}`. Judge: `{data['judge_model']}`."
+    valid_task_count = data.get("valid_task_count")
+    corpus_size = data.get("corpus_size")
+    coverage = data.get("coverage")
+    coverage_str = (
+        f"{valid_task_count}/{corpus_size} tasks with usable data"
+        if valid_task_count is not None
+        else f"{data['tasks_run']} tasks x {data['trials_per_task_per_condition']} trials"
     )
+
+    by_kind = data.get("by_kind", {})
+    case = by_kind.get("case-study")
+    fixture = by_kind.get("fixture")
+
+    if case:
+        lines.append(
+            f"**Headline — real-repo case studies:** claudia "
+            f"**{pct(case['claudia'])}** vs vanilla **{pct(case['vanilla'])}** "
+            f"({pp(case['delta'])}) across {case['task_count']} task(s), one "
+            f"trial per condition, both pinned to `{data['model']}`. "
+            f"Judge: `{data['judge_model']}`."
+        )
+        lines.append("")
+        lines.append(
+            "**n=1 per task per condition.** These are case studies, not a "
+            "statistical sample: one run each against a real repo with real "
+            "conventions and a task too big to hold in one glance. That is "
+            "deliberately where the discipline is expected to matter, but a "
+            "single trial cannot separate a real effect from run-to-run "
+            "variance. Read the direction as the claim and the magnitude as "
+            "noisy."
+        )
+        lines.append("")
+    if fixture:
+        lines.append(
+            f"**Regression suite — synthetic fixtures:** claudia "
+            f"{pct(fixture['claudia'])} vs vanilla {pct(fixture['vanilla'])} "
+            f"({pp(fixture['delta'])}) across {fixture['task_count']} tasks, "
+            f"{fixture['runs_per_condition']} runs per condition. These are "
+            "1-4 file toy repos, and most of them saturate at 100% on both "
+            "arms — they exist to catch a regression in the basics (secret "
+            "handling, input validation, a11y, root-cause fixes), not to "
+            "demonstrate a difference. A tie here is the expected result."
+        )
+        lines.append("")
+    if case and fixture:
+        lines.append(
+            f"Combined across {coverage_str}: claudia {pct(agg['claudia'])} vs "
+            f"vanilla {pct(agg['vanilla'])} ({delta_str}) — kept for continuity "
+            "only, and not a number to quote. It is an unweighted mean per "
+            "task, so a 1-trial case study carrying ~40,000x the cache-read "
+            "volume of a fixture counts exactly as much as a 5-trial toy "
+            "task; the combined figure tracks the two case studies almost "
+            "entirely and is in neither experiment's units."
+        )
+    else:
+        lines.append(
+            f"Checklist pass-rate: **claudia {pct(agg['claudia'])}** vs "
+            f"**vanilla {pct(agg['vanilla'])}** ({delta_str}), "
+            f"{coverage_str}, both pinned to `{data['model']}`. "
+            f"Judge: `{data['judge_model']}`."
+        )
     lines.append("")
+    if coverage is not None and coverage < 1.0:
+        lines.append(
+            f"**WARNING — thin coverage:** only {valid_task_count}/{corpus_size} "
+            f"tasks ({coverage:.0%}) in the full corpus produced usable data in "
+            "this batch — the rest failed (rate limit/budget/crash, see "
+            "'Run failures' below) and are excluded, not averaged in as zero. "
+            "The aggregate above is real but not representative of the full "
+            "corpus. `propagate_readme.py` refuses to publish below 100% "
+            "coverage by default — don't trust this number until it's whole."
+        )
+        lines.append("")
     run_fails = data.get("run_failures", {})
     totals = data.get("activation_total", {})
     if any(run_fails.values()):
@@ -84,6 +156,35 @@ def main():
     lines.append("")
     lines.append("Generated: " + data["generated_at"])
     lines.append("")
+    if by_kind:
+        lines.append("## By experiment — quality and cost, never mixed")
+        lines.append("")
+        lines.append(
+            "| Experiment | tasks | runs/condition | vanilla | claudia | "
+            "Δ quality | vanilla $/task | claudia $/task | Δ $ |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        for kind in ("case-study", "fixture"):
+            k = by_kind.get(kind)
+            if not k:
+                continue
+            kv = k["tokens"]["vanilla"]["total_cost_usd"]
+            kc = k["tokens"]["claudia"]["total_cost_usd"]
+            lines.append(
+                f"| {kind} | {k['task_count']} | {k['runs_per_condition']} | "
+                f"{pct(k['vanilla'])} | {pct(k['claudia'])} | {pp(k['delta'])} | "
+                f"{usd(kv)} | {usd(kc)} | {delta_pct(kv, kc)} |"
+            )
+        lines.append("")
+        lines.append(
+            "The two rows answer different questions and are not averaged "
+            "together anywhere above. Case studies ask whether the discipline "
+            "survives real project weight; fixtures ask whether it broke "
+            "something basic. Cost per task is not comparable across rows "
+            "either — a case study is a multi-hour session against a real "
+            "repo, a fixture is minutes against a toy one."
+        )
+        lines.append("")
     lines.append("## By category")
     lines.append("")
     lines.append("| Category | vanilla | claudia |")
@@ -93,11 +194,12 @@ def main():
 
     lines.append("")
     lines.append(
-        "Trial counts vary by category — a case-study category run once "
-        "per condition (e.g. `graphics-integration`) sits at a different "
-        "confidence level than one averaged over 5 fixture trials. See "
-        "the `trials` column in the by-task table below for each task's "
-        "real count."
+        "Categories span both experiments, so a category row can mix "
+        "confidence levels — a case-study category run once per condition "
+        "(e.g. `graphics-integration`) is not the same evidence as one "
+        "averaged over 5 fixture trials, and saturated regression-guard "
+        "tasks now run 1 trial by design. Use the `Kind` and `trials` "
+        "columns in the by-task table below to see what each row rests on."
     )
     lines.append("")
     lines.append("## By task — quality paired with token/cache usage")
@@ -110,11 +212,11 @@ def main():
     )
     lines.append("")
     lines.append(
-        "| Task | Category | trials | vanilla score | claudia score | "
+        "| Task | Kind | Category | trials | vanilla score | claudia score | "
         "vanilla in/out/cache-r/cache-w tok | claudia in/out/cache-r/cache-w tok | "
         "vanilla $ | claudia $ | Δ tokens (in/out/cache-r/cache-w) | Δ $ |"
     )
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for task_id, t in sorted(data["by_task"].items()):
         vt, ct = t["tokens"]["vanilla"], t["tokens"]["claudia"]
         v_tok = (
@@ -133,7 +235,8 @@ def main():
             )
         )
         lines.append(
-            f"| {task_id} | {t['category']} | {t['trials']} | {pct(t['vanilla'])} | {pct(t['claudia'])} | "
+            f"| {task_id} | {t.get('kind', 'fixture')} | {t['category']} | {t['trials']} | "
+            f"{pct(t['vanilla'])} | {pct(t['claudia'])} | "
             f"{v_tok} | {c_tok} | {usd(vt['total_cost_usd'])} | {usd(ct['total_cost_usd'])} | "
             f"{d_tok} | {delta_pct(vt['total_cost_usd'], ct['total_cost_usd'])} |"
         )
@@ -146,7 +249,14 @@ def main():
     )
 
     lines.append("")
-    lines.append("## Token/cost usage — aggregate")
+    lines.append("## Token/cost usage — aggregate (mixed, see caveat)")
+    lines.append("")
+    lines.append(
+        "This table averages both experiments together and is kept for "
+        "continuity. Because it is an unweighted mean per task, the "
+        "case-study rows dominate every figure in it — the per-experiment "
+        "cost split in \"By experiment\" above is the one to read."
+    )
     lines.append("")
     tu = data.get("token_usage", {}).get("aggregate", {})
     v, c = tu.get("vanilla", {}), tu.get("claudia", {})

@@ -98,11 +98,16 @@ def main():
         f"# Responses\n{sections}\n"
     )
 
-    cmd = ["claude", "-p", judge_prompt, "--model", judge_model, "--output-format", "json"]
+    # Prompt goes via stdin, not argv: a real-repo diff (integration.sh's
+    # case study) is easily large enough to blow past the OS's ARG_MAX as
+    # a command-line argument (OSError: Argument list too long), which
+    # synthetic-fixture diffs never hit but this must handle regardless.
+    cmd = ["claude", "-p", "--model", judge_model, "--output-format", "json"]
     if judge_effort:
         cmd += ["--effort", judge_effort]
     result = subprocess.run(
         cmd,
+        input=judge_prompt,
         capture_output=True,
         text=True,
         check=True,

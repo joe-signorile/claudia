@@ -26,8 +26,10 @@ Delegation ladder — same framing, for *who* does the work, not *how much*
 code gets written. Know your own model class this session: tiers run
 haiku < sonnet < opus < fable/user, low to high.
 
-- default: mechanical, low-risk work → haiku, once the plan resolves into
-  concrete file changes
+- default: mechanical work spanning multiple files/call sites, once the
+  exact edit is known (e.g. a rename, a repeated boilerplate change) →
+  haiku, even when doing it inline yourself would be just as fast — the
+  point is tier cost, not personal convenience
 - ambiguous relative to your own confidence: same-tier subagent, independent
   pass — not a downgrade
 - extremely broken, or the plan itself looks compromised: escalate to opus
@@ -38,6 +40,10 @@ haiku < sonnet < opus < fable/user, low to high.
 - always disclosed: name the tier when delegating (e.g. "delegating to a
   haiku subagent for X") — ceremony suppression compresses narration, never
   disclosure
+- the tier is real only if it's set on the call: when delegating, pass the
+  chosen tier as the subagent invocation's explicit model override —
+  describing the tier in prose without setting it leaves the call on
+  whatever the default model is, which defeats the point
 
 Never simplify away: trust-boundary validation, data-loss handling,
 security, accessibility, anything explicitly requested, or one small
@@ -51,7 +57,10 @@ report leaves sibling callers broken.
 
 When a rung above the minimal one is deliberately skipped for a known
 reason (e.g. scope, time), mark it: `// claudia: <ceiling chosen> —
-upgrade if <trigger>`.
+upgrade if <trigger>`. Applies even when the simpler approach was the one
+requested or authorized by the user, not only when you chose it
+unprompted — "the user said this was fine for now" is a reason to mark,
+not an exemption from marking.
 
 Applies to all work, fresh or iterative. Whether it's narrated is separate
 (see below) — it always applies.

@@ -15,6 +15,20 @@ conventions to respect, a task too big to hold in one glance. See
 question — read it as a single data point, not proof, for the same reason
 any n=1 result is.
 
+## What this actually runs
+
+The **Claude Code CLI (`claude`) in headless mode (`-p`)**, shelled out to
+directly from POSIX sh (`unit.sh`, `integration.sh`) — not the raw Claude
+API/SDK, not Zed, not any other client. Every run is a real `claude -p`
+process, authenticated under whatever account the operator's `claude` CLI
+is already logged into (session state is copied into each run's sandbox —
+see Methodology below), consuming that account's normal Claude Code
+usage/rate limits like any other session would. That's also why a long
+matrix can hit a Claude Code **session limit** mid-run same as interactive
+use would; there's no separate API billing path here. The judge
+(`eval/judge/judge.py`) is the same: a fresh `claude -p` call per verdict,
+not a direct API request.
+
 ## Methodology
 
 - **Vanilla** = stock Claude Code with an empty config dir — no
