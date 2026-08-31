@@ -164,10 +164,16 @@ to size a partial run before committing to the full matrix.
 ## Case studies
 
 `eval/integration.sh` is a separate runner for a single hard, genuinely
-unimplemented roadmap item against a real external repo — currently
-[italy-rs](https://github.com/joe-signorile/italy-rs), a 7.6k-LOC
-C++/CUDA/OptiX pathtracer that already imports claudia's doctrine via its
-own `CLAUDE.md`. Differences from `unit.sh`:
+unimplemented roadmap item against a real external repo. The repo isn't
+hardcoded — it's derived from the task's own `fixture:` frontmatter field
+(default `$HOME/projects/<fixture>`, override with `EVAL_REPO`), the same
+convention `eval/aggregate.py`'s `task_kind()` uses to tell a real-repo
+case study apart from a synthetic fixture. Current case studies:
+[italy-rs](https://github.com/joe-signorile/italy-rs) (7.6k-LOC
+C++/CUDA/OptiX pathtracer, `gsplat-resample-01`), `instrumental` (Rust ACP
+gateway, `instrumental-eventbus-harden-01`), and `rogue` (TS/WebGL2 voxel
+roguelike, `rogue-gi-invalidation-perf-01`) — all three already import
+claudia's doctrine via their own `CLAUDE.md`. Differences from `unit.sh`:
 
 - **One trial per condition**, no averaging — this is a case study, not a
   statistical sample. It still folds into the same `by_task`/`by_category`
@@ -209,9 +215,12 @@ own `CLAUDE.md`. Differences from `unit.sh`:
   suffix to find the task's real category/checklist).
 
 ```sh
-ITALY_REPO=~/projects/italy-rs ./eval/integration.sh   # sonnet/medium, default
-EVAL_MODEL=opus EVAL_EFFORT=high ./eval/integration.sh # opus/high tier, same task
-./eval/eval.sh eval/runs/<batch>                       # fold either/both into latest.md/json
+./eval/integration.sh                                        # gsplat-resample-01 (italy-rs), sonnet/medium
+./eval/integration.sh --task instrumental-eventbus-harden-01  # repo derived: ~/projects/instrumental
+./eval/integration.sh --task rogue-gi-invalidation-perf-01    # repo derived: ~/projects/rogue
+EVAL_MODEL=opus EVAL_EFFORT=high ./eval/integration.sh        # opus/high tier, same task
+EVAL_REPO=/path/to/checkout ./eval/integration.sh --task foo-01  # override the derived repo
+./eval/eval.sh eval/runs/<batch>                              # fold either/both into latest.md/json
 ```
 
 ## Output

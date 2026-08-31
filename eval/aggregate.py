@@ -11,6 +11,7 @@ Usage: aggregate.py <batch_dir> <model> <judge_model> <trials>
 Prints eval/results/latest.json-shaped JSON to stdout.
 """
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,6 +98,31 @@ def run_valid(condition, task_dir, trial):
     )
 
 
+PROSE_FIELDS = ("words", "chars")
+
+CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+
+
+def load_prose(condition, task_dir, trial):
+    """Length of the final text reply, code blocks excluded.
+
+    The voice rule never compresses verbatim content — code, commands,
+    terminal output, diffs are reproduced exactly — so counting fenced
+    blocks would score the wanted behaviour as verbosity. Prose only.
+
+    This is the continuous counterpart to the voice checklist: a boolean
+    "is the reply short" item saturates the moment both arms clear its
+    threshold and then can't show a gap in either direction. None for
+    excluded (invalid) runs, same rule as load_tokens."""
+    if not run_valid(condition, task_dir, trial):
+        return None
+    summary = safe_json(task_dir / condition / str(trial) / "summary.json")
+    if not summary:
+        return None
+    prose = CODE_FENCE_RE.sub("", str(summary.get("final_response") or "")).strip()
+    return {"words": len(prose.split()), "chars": len(prose)}
+
+
 TOKEN_FIELDS = (
     "input_tokens",
     "output_tokens",
@@ -172,6 +198,7 @@ def main():
 
         task_scores = {"vanilla": [], "claudia": []}
         task_tokens = {"vanilla": {f: [] for f in TOKEN_FIELDS}, "claudia": {f: [] for f in TOKEN_FIELDS}}
+        task_prose = {"vanilla": {f: [] for f in PROSE_FIELDS}, "claudia": {f: [] for f in PROSE_FIELDS}}
         for trial in range(1, trials + 1):
             for condition in ("vanilla", "claudia"):
                 if (task_dir / condition / str(trial)).exists():
@@ -183,6 +210,11 @@ def main():
                 score = trial_score(condition, task_dir, trial)
                 if score is not None:
                     task_scores[condition].append(score)
+
+                prose = load_prose(condition, task_dir, trial)
+                if prose is not None:
+                    for field in PROSE_FIELDS:
+                        task_prose[condition][field].append(prose[field])
 
                 tokens = load_tokens(condition, task_dir, trial)
                 if tokens is not None:
@@ -201,6 +233,10 @@ def main():
             "tokens": {
                 condition: {field: mean(vals) for field, vals in fields.items()}
                 for condition, fields in task_tokens.items()
+            },
+            "prose": {
+                condition: {field: mean(vals) for field, vals in fields.items()}
+                for condition, fields in task_prose.items()
             },
         }
 
@@ -239,6 +275,17 @@ def main():
                         if by_task[i]["tokens"][condition][field] is not None
                     ])
                     for field in TOKEN_FIELDS
+                }
+                for condition in ("vanilla", "claudia")
+            },
+            "prose": {
+                condition: {
+                    field: mean([
+                        by_task[i]["prose"][condition][field]
+                        for i in ids
+                        if by_task[i]["prose"][condition][field] is not None
+                    ])
+                    for field in PROSE_FIELDS
                 }
                 for condition in ("vanilla", "claudia")
             },

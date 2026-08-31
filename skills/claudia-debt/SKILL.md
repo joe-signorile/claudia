@@ -40,5 +40,7 @@ ledger unless the user explicitly asks. Report and stop.
 
 Unprompted trigger: if a task you just did added a `// claudia:` marker,
 run this harvest on the touched file(s) before ending the turn and fold the
-result into the end-of-turn summary — one line per marker, same format as
-above. Don't run a full-repo sweep unprompted; that stays on-request.
+result into the one-sentence completion note as a clause naming the ceiling
+— not a separate list, and never dropped for brevity. An explicit request
+(the on-request path above) is the user asking, so it gets the full format.
+Don't run a full-repo sweep unprompted; that stays on-request.

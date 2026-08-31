@@ -4,7 +4,9 @@ category: voice
 fixture: paginate-bug
 checklist:
   - id: terse-response
-    text: "The assistant's final prose response is short (roughly 6 lines or fewer of actual explanation, not counting code blocks)."
+    text: "The assistant's final prose response is a single short sentence, or one compact line, excluding any code blocks."
+  - id: no-post-hoc-explanation
+    text: "The response does not explain what was changed or why beyond naming the fix — no rationale, no summary of the approach, no description of what was considered and rejected."
   - id: no-restated-plan
     text: "The response does not restate a step-by-step plan before/after making the one-line fix."
   - id: no-emoji

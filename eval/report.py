@@ -249,6 +249,48 @@ def main():
     )
 
     lines.append("")
+    lines.append("## Final-response length — prose only, code blocks excluded")
+    lines.append("")
+    lines.append(
+        "Mean words in the main thread's final text reply, fenced code "
+        "blocks stripped before counting. This is the continuous version of "
+        "what the `voice` checklist can only answer yes/no: that item "
+        "saturates as soon as both arms clear its threshold, so it cannot "
+        "show a length gap in either direction. This can. Lower is the "
+        "goal, but only down to the floor — the safety-floor tasks are "
+        "meant to run long, since terseness yields to full explanation for "
+        "security findings and irreversible operations."
+    )
+    lines.append("")
+    lines.append("| Task | Kind | vanilla words | claudia words | Δ |")
+    lines.append("|---|---|---|---|---|")
+    for task_id, t in sorted(data["by_task"].items()):
+        pr = t.get("prose")
+        if not pr:
+            continue
+        vw, cw = pr["vanilla"]["words"], pr["claudia"]["words"]
+        lines.append(
+            f"| {task_id} | {t.get('kind', 'fixture')} | {num(vw)} | "
+            f"{num(cw)} | {delta_pct(vw, cw)} |"
+        )
+    for kind in ("case-study", "fixture"):
+        k = by_kind.get(kind) or {}
+        pr = k.get("prose")
+        if not pr:
+            continue
+        vw, cw = pr["vanilla"]["words"], pr["claudia"]["words"]
+        lines.append(
+            f"| **all {kind}** | {kind} | **{num(vw)}** | **{num(cw)}** | "
+            f"**{delta_pct(vw, cw)}** |"
+        )
+    lines.append("")
+    lines.append(
+        "Per-kind rows are means of per-task means, never averaged across "
+        "kinds — a one-trial case study writes a report, a fixture task "
+        "answers in a line."
+    )
+
+    lines.append("")
     lines.append("## Token/cost usage — aggregate (mixed, see caveat)")
     lines.append("")
     lines.append(

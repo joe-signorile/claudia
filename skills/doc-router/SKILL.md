@@ -10,16 +10,16 @@ description: >
   no bloat is anti-YAGNI.
 ---
 
-Suggest — and on request perform — the doc-router split: shrink an overloaded
-always-loaded CLAUDE.md down to a thin router.
+Perform the doc-router split once gated (see Depth below): shrink an
+overloaded always-loaded CLAUDE.md down to a thin router.
 
 ## The pattern
 
 - **Router `CLAUDE.md`** — routes, holds no content. Names the agent reference
   as mandatory-first reading and points humans at their docs.
-- **Agent reference** (`agents.toon` or `agents.md`) — the dense technical
-  reference: architecture, commands, constants, invariants. Read first for any
-  code work.
+- **Agent reference** (`agents.md`; `agents.toon` only in the narrow case
+  below) — the dense technical reference: architecture, commands, constants,
+  invariants. Read first for any code work.
 - **Human docs** (`README.md`) — overview, install, prose. Stays human-facing.
 
 ## No existing docs
@@ -43,16 +43,26 @@ minimalism ladder exists to prevent.
 
 ## Format: TOON vs Markdown
 
-Choose by whether density pays off:
+Markdown is the default. Choose by the *shape* of the reference, not the size
+of the project.
 
-- **TOON** when the project is large or has compiled source with many symbols,
-  commands, and modules — the token savings are real at that size. TOON packs
-  typed tables (`commands[]{name,cmd,notes}`, `rules[]`, `stack[]{name,version}`)
-  far denser than prose. Name the format and point the user at it; don't inline
-  a full spec here.
-- **Markdown** when the project is small or doc-only — density gains are
-  marginal and md is more maintainable. claudia applied this same rule to
-  its own repo and chose md.
+- **Markdown** unless the test below passes. Agent references are mostly prose
+  — invariants, rationale, gotchas — and TOON's own docs are explicit that for
+  deeply nested or non-uniform data, compact alternatives win outright. There
+  is also no repeated-key tax in markdown to recover in the first place, so the
+  headline TOON-vs-JSON savings don't transfer to a doc file.
+- **TOON** only when the reference is *predominantly* uniform records — many
+  rows sharing one key set (a large symbol/command/module table), with the
+  prose reduced to a thin wrapper around them. A big project whose reference is
+  still mostly prose does not qualify.
+
+Two costs to weigh before switching: spelling out the format inline costs
+instruction overhead that erases the savings at small sizes, and omitting it
+leaves a future session inferring the syntax. Separately, don't extend this to
+tool output — TOON measurably degrades multi-turn agentic accuracy and
+parallel tool-call handling.
+
+claudia applied this rule to its own repo and chose md.
 
 ## Depth
 

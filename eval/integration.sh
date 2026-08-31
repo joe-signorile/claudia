@@ -1,11 +1,17 @@
 #!/bin/sh
 # Runs the real-world-repo half of the claudia eval: a single hard,
-# genuinely-deferred italy-rs roadmap task, one trial per condition, each
-# on its own git worktree/branch in the real italy-rs repo. Unlike
+# genuinely-deferred roadmap task against a real external repo, one trial
+# per condition, each on its own git worktree/branch in that repo. Unlike
 # eval/unit.sh's throwaway fixtures, this is a two-stage session per
 # condition — plan mode first, then an auto-approved resume to execute —
 # because a task this size is meant to be planned before it's built, the
 # same way a human would drive it.
+#
+# Which repo: derived from the task's `fixture:` frontmatter field, same
+# convention eval/aggregate.py's task_kind() uses to tell a case study
+# apart from a synthetic fixture (no matching dir under eval/fixtures/ ->
+# it names a real repo). Default path is $HOME/projects/<fixture>;
+# EVAL_REPO overrides it for a non-standard checkout location.
 #
 # No budget cap (deliberately — this is a single deep case study, not a
 # statistical corpus entry averaged over cheap trials).
@@ -23,7 +29,7 @@
 #   EVAL_MODEL=opus EVAL_EFFORT=high ./eval/integration.sh   # the opus/high tier
 #   ./eval/integration.sh --task foo-01           # a different eval/tasks/ task
 #   ./eval/integration.sh --batch 20260829T152616Z  # target/resume a batch
-#   ITALY_REPO=/path/to/italy-rs ./eval/integration.sh
+#   EVAL_REPO=/path/to/repo ./eval/integration.sh    # override the derived path
 #   EVAL_BASE_BRANCH=claudia-integration-eval ./eval/integration.sh   # default
 #
 # Per-condition branches fork off EVAL_BASE_BRANCH, not master directly —
@@ -44,7 +50,6 @@ set -eu
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$REPO_DIR/eval/lib/sandbox.sh"
 
-: "${ITALY_REPO:=$HOME/projects/italy-rs}"
 : "${EVAL_BASE_BRANCH:=claudia-integration-eval}"
 : "${EVAL_MODEL:=sonnet}"
 : "${EVAL_EFFORT:=medium}"
@@ -67,10 +72,16 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-[ -d "$ITALY_REPO/.git" ] || { echo "not a git repo: $ITALY_REPO (set ITALY_REPO)" >&2; exit 1; }
 task_file="$REPO_DIR/eval/tasks/$TASK_ID.md"
 [ -f "$task_file" ] || { echo "no such task file: $task_file" >&2; exit 1; }
 command -v uuidgen >/dev/null 2>&1 || { echo "uuidgen required (session-id for the plan/execute resume)" >&2; exit 1; }
+
+# Repo to run against: derived from the task's own fixture: field (see the
+# header comment) unless EVAL_REPO overrides it.
+fixture="$(awk '/^---$/{c++; next} c==1 && /^fixture:/{print $2; exit}' "$task_file")"
+[ -n "$fixture" ] || { echo "task $TASK_ID has no fixture: field to derive a repo from (set EVAL_REPO explicitly)" >&2; exit 1; }
+: "${EVAL_REPO:=$HOME/projects/$fixture}"
+[ -d "$EVAL_REPO/.git" ] || { echo "not a git repo: $EVAL_REPO (set EVAL_REPO)" >&2; exit 1; }
 
 [ -n "$BATCH" ] || BATCH="$(date -u +%Y%m%dT%H%M%SZ)"
 BATCH_DIR="$REPO_DIR/eval/runs/$BATCH"
@@ -82,18 +93,18 @@ awk '/^---$/{c++; next} c>=2' "$task_file" > "$prompt_file"
 prompt="$(cat "$prompt_file")"
 rm -f "$prompt_file"
 
-git -C "$ITALY_REPO" rev-parse --verify "$EVAL_BASE_BRANCH" >/dev/null 2>&1 || {
-  echo "no such base branch in $ITALY_REPO: $EVAL_BASE_BRANCH (set EVAL_BASE_BRANCH)" >&2
+git -C "$EVAL_REPO" rev-parse --verify "$EVAL_BASE_BRANCH" >/dev/null 2>&1 || {
+  echo "no such base branch in $EVAL_REPO: $EVAL_BASE_BRANCH (set EVAL_BASE_BRANCH)" >&2
   exit 1
 }
-base_ref="$(git -C "$ITALY_REPO" rev-parse "$EVAL_BASE_BRANCH")"
+base_ref="$(git -C "$EVAL_REPO" rev-parse "$EVAL_BASE_BRANCH")"
 echo "Branch point: $EVAL_BASE_BRANCH @ $base_ref"
 
 run_condition() {
   # run_condition <condition>
   condition="$1"
   branch="eval/${TASK_ID}-${TIER}-${condition}"
-  worktree_dir="$ITALY_REPO/.claude/worktrees/eval-${TASK_ID}-${TIER}-${condition}"
+  worktree_dir="$EVAL_REPO/.claude/worktrees/eval-${TASK_ID}-${TIER}-${condition}"
   run_dir="$BATCH_DIR/${TASK_ID}--${TIER}/$condition/1"
 
   if python3 "$REPO_DIR/eval/lib/run_status.py" run "$run_dir" >/dev/null 2>&1; then
@@ -103,15 +114,15 @@ run_condition() {
 
   # A prior incomplete attempt may have left a worktree/branch behind —
   # tear it down so worktree add below starts clean.
-  if git -C "$ITALY_REPO" worktree list --porcelain | grep -qx "worktree $worktree_dir"; then
-    git -C "$ITALY_REPO" worktree remove --force "$worktree_dir"
+  if git -C "$EVAL_REPO" worktree list --porcelain | grep -qx "worktree $worktree_dir"; then
+    git -C "$EVAL_REPO" worktree remove --force "$worktree_dir"
   fi
-  if git -C "$ITALY_REPO" show-ref --verify --quiet "refs/heads/$branch"; then
-    git -C "$ITALY_REPO" branch -D "$branch" >/dev/null
+  if git -C "$EVAL_REPO" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$EVAL_REPO" branch -D "$branch" >/dev/null
   fi
 
   mkdir -p "$run_dir"
-  git -C "$ITALY_REPO" worktree add -b "$branch" "$worktree_dir" "$EVAL_BASE_BRANCH"
+  git -C "$EVAL_REPO" worktree add -b "$branch" "$worktree_dir" "$EVAL_BASE_BRANCH"
 
   sandbox="$(make_sandbox)"
   trap 'cleanup_sandbox "$sandbox"' EXIT INT TERM
@@ -219,9 +230,9 @@ done
 
 echo "Done. Batch: $BATCH_DIR"
 echo "Diffs copied to $case_dir (fill in $case_dir/README.md by hand)."
-echo "Branches created in $ITALY_REPO:$branches"
+echo "Branches created in $EVAL_REPO:$branches"
 echo "Aggregate + report: EVAL_TRIALS=1 ./eval/eval.sh $BATCH_DIR"
-echo "Cleanup when done inspecting (from $ITALY_REPO):"
+echo "Cleanup when done inspecting (from $EVAL_REPO):"
 for condition in $(echo "$EVAL_CONDITIONS" | tr ',' ' '); do
   echo "  git worktree remove .claude/worktrees/eval-${TASK_ID}-${TIER}-${condition} && git branch -D eval/${TASK_ID}-${TIER}-${condition}"
 done

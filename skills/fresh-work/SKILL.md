@@ -19,12 +19,10 @@ Before writing any code:
    ```
 2. Ask clarifying questions if genuinely ambiguous — don't silently guess on
    anything that would materially change the design.
-3. If Claude Code's plan mode is already active, defer to it — don't
-   duplicate the ceremony. This skill exists for fresh work requested outside
-   of an explicit plan-mode session.
-4. Once scope is confirmed, execute. Don't re-restate the plan or narrate
-   each step — that's the claudia anti-ceremony rule, and it still applies
-   here.
+3. If Claude Code's plan mode is already active, defer to it — this skill
+   covers fresh work requested outside an explicit plan-mode session.
+4. Once scope is confirmed, execute without restating the plan or
+   narrating each step (claudia's anti-ceremony rule still applies).
 
 This supplements, not replaces, the claudia output style's voice,
 minimalism ladder, and delegation ladder — keep using all three.

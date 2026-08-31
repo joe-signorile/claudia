@@ -1,3 +1,4 @@
+#!/bin/sh
 # Shared Claude config-dir discovery/selection, sourced by install.sh and
 # uninstall.sh. Not shipped to ~/.claude/ — repo-local tooling only.
 

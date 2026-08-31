@@ -29,10 +29,10 @@ two POSIX shell installers.
   stay on-request).
 - `skills/doc-router/SKILL.md` — splits an overloaded `CLAUDE.md` (thin
   router + dense agent reference + human docs) when a project shows real
-  bloat, or on request; TOON vs md by density. Gated on the bloat signal, but
-  once the gate fires it performs the split directly — no advise-then-offer
-  pause. If no `CLAUDE.md` exists yet, runs `init` first, then re-applies
-  the gate.
+  bloat, or on request; md by default, TOON only when the reference is
+  predominantly uniform records. Gated on the bloat signal, but once the
+  gate fires it performs the split directly — no advise-then-offer pause.
+  If no `CLAUDE.md` exists yet, runs `init` first, then re-applies the gate.
 - `agents/claudia.md` — opt-in worker subagent carrying the voice +
   ladder into delegated code-writing.
 - `install.sh` / `uninstall.sh` — symlink artifacts into `~/.claude/` (one
@@ -103,6 +103,30 @@ two POSIX shell installers.
   size (which is fixed/cached regardless of output style).
 - **Voice applies to the repo's own docs.** Dry/deadpan, no emoji, compact
   over verbose. These docs obey claudia's own rules.
+- **The completion rule is one sentence, with exactly two exemptions.**
+  Finished work ends in one short sentence — no approach summary, no
+  rationale, no restating the diff. Exempt: (a) security findings,
+  destructive/irreversible operations, and refusing/amending an instruction
+  that would break something; (b) explanation the user explicitly asked
+  for. Delegation-tier disclosure and new `claudia:` markers are *not*
+  exempt — they compress into the sentence as a clause. That distinction is
+  load-bearing, not stylistic: `delegation-trivial-01` and
+  `delegation-escalate-01` score tier disclosure against the final response
+  text, so wording that reads as "omit" instead of "compress" regresses
+  those categories directly. Stated in `CLAUDE.md.snippet` (source of
+  truth), `output-styles/claudia.md`, and `agents/claudia.md` — same
+  three-file lockstep as the ladders.
+- **Response length is measured continuously, not by checklist.**
+  `eval/aggregate.py`'s `load_prose()` counts words in `summary.json`'s
+  `final_response` with fenced code blocks stripped (verbatim content is
+  never compressed, so counting it would score the wanted behaviour as
+  verbosity), rolled up per task and per kind exactly like tokens.
+  `voice-01`'s checklist is a floor guard only: a boolean "is it short"
+  item saturates the moment both arms clear its threshold and then cannot
+  show a gap in either direction — that is why the `voice` category read
+  vanilla 95% / claudia 90% while claudia's replies were ~2x shorter.
+  Quote the `prose` figures, not the `voice` row, for anything about
+  output length.
 - **Every skill/agent self-triggers on its own gate — none require an
   explicit ask.** `fresh-work` already worked this way; `doc-router` and
   `claudia-debt` were changed to match (was: advise-then-offer /
@@ -121,12 +145,27 @@ two POSIX shell installers.
   regression from what's currently published). If the task corpus changes,
   re-run `./eval/unit.sh && ./eval/eval.sh <batch>` before trusting a stale
   `latest.md`.
+- **Fixture tasks and case studies are never averaged together.**
+  `eval/aggregate.py`'s `task_kind()` classifies every task as `fixture`
+  (a `fixture:` name that resolves under `eval/fixtures/`, 5-trial toy
+  repo, mostly saturated at 100% by design — a regression guard, not a
+  discriminator) or `case-study` (a real external repo, 1 trial, the
+  actual claudia thesis). Both land in `by_kind` in `latest.json`; the old
+  unweighted `aggregate`/`delta` fields are kept for continuity only and
+  must never be the quoted number, since an n=1 case study's cache-read
+  volume can be ~4 orders of magnitude a fixture's and would silently
+  dominate any mean taken across both. `propagate_readme.py` publishes
+  `by_kind["case-study"]`, never `aggregate` — if you add a new kind of
+  task, `task_kind()` needs to classify it or this silently breaks.
 - **`eval/` is split three ways.** `unit.sh` runs the synthetic-fixture
   corpus (throwaway repos, cheap, 5 trials/task, `--resume`-able).
   `integration.sh` runs a single hard, real roadmap task against a real
-  external repo (currently `italy-rs`) on its own git worktree/branch per
-  condition, no budget cap, one trial, two-stage plan-then-execute session
-  — a case study, not a statistical sample. `eval.sh` is the shared
+  external repo — which repo is derived per-task from the task's own
+  `fixture:` field (default `$HOME/projects/<fixture>`, `EVAL_REPO`
+  overrides), currently `italy-rs`, `instrumental`, and `rogue` — on its
+  own git worktree/branch per condition, no budget cap, one trial,
+  two-stage plan-then-execute session — a case study, not a statistical
+  sample. `eval.sh` is the shared
   aggregate+report tail either one's batch dir feeds into; it has no
   orchestration logic of its own. Both writers use the identical
   `$BATCH_DIR/<task_id>/<condition>/<trial>/` artifact shape so
