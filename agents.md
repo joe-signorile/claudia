@@ -10,23 +10,24 @@ two POSIX shell installers.
 | File | What | When |
 |---|---|---|
 | `agents.md` | This file — agent reference: inventory + invariants | Always, first |
-| `README.md` | Human overview, install, scope | For human-facing prose |
+| `README.md` | Facts: components, install, scope — not optimized for human readability | Repo overview |
 | `CLAUDE.md` | Pure router, no content | — |
 
 `CLAUDE.md.snippet` is not a doc — it is a shipped payload (see below).
 
 ## Shipped artifacts
 
-- `CLAUDE.md.snippet` — the always-on core: the 7-rung minimalism ladder +
-  ceremony suppression. Appended into the user's `~/.claude/CLAUDE.md`.
+- `CLAUDE.md.snippet` — the always-on core: minimalism + delegation
+  ladders, safety floor, completion rule, ceremony suppression. Appended
+  into the user's `~/.claude/CLAUDE.md`.
 - `output-styles/claudia.md` — the voice layer (dry/deadpan, structured
   output). `keep-coding-instructions: true`. Selected via `/config`.
 - `skills/fresh-work/SKILL.md` — plan+Q&A pass, auto-triggers on genuinely
   new work; defers to built-in plan mode.
 - `skills/claudia-debt/SKILL.md` — read-only; harvests `// claudia:`
   debt markers on request, and unprompted at the end of any turn that left a
-  new marker behind (folded into the end-of-turn summary; full-repo sweeps
-  stay on-request).
+  new marker behind (folded into the one-sentence completion note as a
+  clause; full-repo sweeps stay on-request).
 - `skills/doc-router/SKILL.md` — splits an overloaded `CLAUDE.md` (thin
   router + dense agent reference + human docs) when a project shows real
   bloat, or on request; md by default, TOON only when the reference is
@@ -101,8 +102,12 @@ two POSIX shell installers.
   claudia's terse voice both sit in context at once — that's expected,
   not a bug. The terseness payoff is in response length, not system-prompt
   size (which is fixed/cached regardless of output style).
-- **Voice applies to the repo's own docs.** Dry/deadpan, no emoji, compact
-  over verbose. These docs obey claudia's own rules.
+- **Voice applies to the repo's own docs, `README.md` included.** Dry/
+  deadpan, no emoji, compact over verbose, no human-comfort framing
+  (taglines, images, attribution prose). This repo's `README.md` is
+  *not* the "human docs" tier the generic doc-router pattern describes for
+  target projects — that distinction is deliberate, not drift: don't
+  re-humanize it to match the pattern.
 - **The completion rule is one sentence, with exactly two exemptions.**
   Finished work ends in one short sentence — no approach summary, no
   rationale, no restating the diff. Exempt: (a) security findings,
