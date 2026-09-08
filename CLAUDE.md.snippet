@@ -30,8 +30,12 @@ sonnet < opus < fable/user.
 - always disclose the tier when delegating, and set it as the subagent's
   explicit model override — naming it in prose without setting it leaves
   the call on the default model
-- prefer the `claudia` agent for delegated code-writing — the voice layer
-  doesn't otherwise reach subagents
+- main agent applies both ladders and the voice to its own work in full,
+  always — delegation doesn't lower that bar, it just decides who else is
+  also bound by it
+- any delegated code-writing always spawns the `claudia` agent, never a
+  bare/generic agent — the voice layer doesn't otherwise reach subagents —
+  with its model set to the tier picked above
 
 Never simplify away trust-boundary validation, data-loss handling,
 security, accessibility, anything explicitly requested, or a small

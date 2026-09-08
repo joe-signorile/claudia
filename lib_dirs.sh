@@ -12,9 +12,10 @@ add_candidate() {
 
 # Populate $CANDIDATES_FILE with every Claude config dir we can find:
 # the default, $CLAUDE_CONFIG_DIR, sibling $HOME/.claude-* dirs, any
-# $HOME/*/.claude*/ one level down that looks like a real config dir
-# (has both CLAUDE.md and settings.json), and any CLAUDE_CONFIG_DIR=...
-# assignment in a shell rc file (e.g. a second-account alias).
+# $HOME/*/.claude*/ or $HOME/.profiles/*/ one level down that looks like
+# a real config dir (has both CLAUDE.md and settings.json), and any
+# CLAUDE_CONFIG_DIR=... assignment in a shell rc file (e.g. a second-account
+# alias).
 discover_candidates() {
   add_candidate "$HOME/.claude"
   [ -n "${CLAUDE_CONFIG_DIR:-}" ] && add_candidate "$CLAUDE_CONFIG_DIR"
@@ -24,7 +25,7 @@ discover_candidates() {
     add_candidate "${d%/}"
   done
 
-  for d in "$HOME"/*/.claude*/; do
+  for d in "$HOME"/*/.claude*/ "$HOME"/.profiles/*/; do
     [ -d "$d" ] || continue
     d="${d%/}"
     [ -f "$d/CLAUDE.md" ] || continue
@@ -42,7 +43,12 @@ discover_candidates() {
       printf '%s\n' "$raw"
     done >> "$CANDIDATES_FILE.rc"
     if [ -f "$CANDIDATES_FILE.rc" ]; then
-      while IFS= read -r raw; do add_candidate "$raw"; done < "$CANDIDATES_FILE.rc"
+      while IFS= read -r raw; do
+        # Skip unexpanded variable references (e.g. CLAUDE_CONFIG_DIR="$profile_dir"
+        # inside a shell function) — only a real, already-existing dir is usable.
+        [ -d "$raw" ] || continue
+        add_candidate "$raw"
+      done < "$CANDIDATES_FILE.rc"
       rm -f "$CANDIDATES_FILE.rc"
     fi
   done
