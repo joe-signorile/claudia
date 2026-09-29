@@ -5,6 +5,9 @@
 # tests/install_test.sh.
 set -eu
 
+# Sourced, so $0 is the caller's script, not this file; take REPO_DIR from it.
+SANDBOX_LIB_REPO_DIR="${REPO_DIR:?sandbox.sh: caller must set REPO_DIR}"
+
 # Config dir to seed auth/session state from (NOT behavior config — see
 # strip step below). Best-effort: if `claude`'s credentials live somewhere
 # other than this discovered dir, runs will fail to authenticate and
@@ -25,7 +28,16 @@ make_sandbox() {
   # own personal CLAUDE.md/skills/agents/output-style.
   rm -rf "$dir/home/.claude/CLAUDE.md" "$dir/home/.claude/CLAUDE.md.bak" \
     "$dir/home/.claude/skills" "$dir/home/.claude/agents" \
-    "$dir/home/.claude/output-styles"
+    "$dir/home/.claude/output-styles" "$dir/home/.claude/hooks"
+  # settings.json is copied wholesale for auth, so it carries the operator's
+  # own hook registrations, whose paths point at the real config dir (so
+  # hooks-off's ownership check would not match the sandbox). Drop the key;
+  # the claudia arm re-registers via install.sh. Failure is loud: a leaked
+  # guard silently voids the control arm.
+  if [ -f "$dir/home/.claude/settings.json" ]; then
+    python3 "$SANDBOX_LIB_REPO_DIR/lib_settings.py" hooks-clear \
+      "$dir/home/.claude/settings.json" >/dev/null
+  fi
   printf '%s\n' "$dir"
 }
 

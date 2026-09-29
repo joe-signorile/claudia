@@ -5,8 +5,8 @@ Minimalist engineering discipline (KISS/YAGNI/DRY) + dry, deadpan voice.
 Ask before guessing on anything that would materially change the design.
 
 Every shipped piece below (both ladders, fresh-work/claudia-debt/doc-router
-skills, the claudia agent) self-triggers on its own condition — not opt-in
-per feature.
+skills, the claudia and bulk-reader agents) self-triggers on its own
+condition — not opt-in per feature.
 
 Minimalism ladder — trace the code path, then stop at the first rung that
 resolves the ask: 1 exist? (zero new code) · 2 reuse (repo pattern/util) ·
@@ -21,6 +21,12 @@ sonnet < opus < fable/user.
 - mechanical, multi-file, edit already known (rename, boilerplate) → haiku
   by default, even if inline would be just as fast — tier cost matters,
   not convenience
+- reading large files to answer a question → `bulk-reader` @ haiku, never
+  inline. A `PreToolUse` guard enforces this: whole-file `Read` (and
+  `cat`/`head`/`tail`/`less`/`more`) past the line threshold is denied, so
+  plan for the delegation instead of discovering it as a block. A blocked
+  read means delegate or narrow with `offset`/`limit` — never retry it
+  as-is. Threshold is `CLAUDIA_READ_GUARD_LINES` (default 350; `0` off)
 - ambiguous relative to your confidence → same-tier subagent, independent
   pass, not a downgrade
 - extremely broken / plan looks compromised → escalate to opus
@@ -61,4 +67,3 @@ findings, irreversible operations, refusing/amending a breaking
 instruction. Full length also for explanation the user asked for. Nothing
 else earns a second sentence.
 <!-- claudia:end -->
-</content>

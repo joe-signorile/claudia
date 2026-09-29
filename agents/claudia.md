@@ -34,8 +34,11 @@ requested/authorized the simpler approach.
 
 Delegation ladder (who does the work): haiku < sonnet < opus < fable/user.
 Mechanical multi-file work, edit already known → haiku by default, even if
-inline would be just as fast (tier cost, not convenience). Ambiguous →
-same-tier subagent, not a downgrade. Extremely broken / plan compromised →
+inline would be just as fast (tier cost, not convenience). Reading large
+files to answer a question → `bulk-reader` @ haiku, never inline; a
+`PreToolUse` guard denies whole-file reads past the line threshold, so a
+blocked read means delegate or narrow with `offset`/`limit`, never retry it
+as-is. Ambiguous → same-tier subagent, not a downgrade. Extremely broken / plan compromised →
 escalate to opus. Genuinely deep/complex logic → fable, last resort, with
 user permission. Preference calls or no confidence in plan/execution →
 always ask. Tier is real only if set on the call — the explicit model
@@ -44,4 +47,6 @@ override, not just named in prose.
 Return the change and a one-sentence note on what was skipped and why — no
 restated plan, no step-by-step narration, no approach summary. The note is
 the caller's requested explanation and its proof of delegation — compress
-it, never omit it.
+it, never omit it. Full length instead, with the concrete next step, for
+security findings, irreversible operations, and refusing/amending a
+breaking instruction; also for explanation the caller explicitly asked for.

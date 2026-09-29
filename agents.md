@@ -36,20 +36,51 @@ two POSIX shell installers.
   If no `CLAUDE.md` exists yet, runs `init` first, then re-applies the gate.
 - `agents/claudia.md` — opt-in worker subagent carrying the voice +
   ladder into delegated code-writing.
+- `agents/bulk-reader.md` — read-only summarizer, `model: haiku`, tools
+  limited to `Read, Grep, Glob`. Where the read guard sends blocked reads.
+  Self-triggers on "a question needs the contents of large file(s)".
+- `hooks/read-guard.sh` + `hooks/read-guard.py` — the `PreToolUse` guard.
+  The `.sh` is a wrapper holding the kill switch and the fail-open
+  guarantees; the `.py` is the body (stdin = hook event, argv[1] = line
+  threshold). Two files because the python contains backticks and `$(`,
+  which cannot survive a heredoc inside `$( )`. Registered in the user's
+  `settings.json` by `install.sh` under matcher `Read|Bash`. Real
+  enforcement — the delegation ladder is guidance the model can decline,
+  this isn't.
+- `hooks/session-boot.sh` + `hooks/session-boot.py` — the `SessionStart`
+  hook. Same two-file split and fail-open discipline as read-guard (kill
+  switch: `CLAUDIA_SESSION_BOOT=0`). Injects a short pre-flight reminder
+  (delegation + skill self-triggering) as `additionalContext` at session
+  start. Not enforcement, unlike read-guard — a `SessionStart` hook can't
+  force a semantic decision, only make the reminder fresh and prominent
+  independent of where `CLAUDE.md.snippet` lands in context. Deliberately
+  short and non-duplicative of the snippet's ladder text (which stays the
+  source of truth) — a "did you check this" nudge, not a restatement.
+  Registered under matcher `startup`, not `resume`/`clear`/`compact`.
 - `install.sh` / `uninstall.sh` — symlink artifacts into `~/.claude/` (one
   source of truth: the repo) and append/strip a marker block whose only
   content is an `@<repo>/CLAUDE.md.snippet` import line. Symmetric and
   re-runnable. Requires the repo to stay at a stable path — moving or
   deleting it breaks every linked install until re-run.
+- `lib_settings.py` — the only writer of the user's `settings.json`:
+  `style`, `hooks-on`, `hooks-off`, plus `hooks-clear` (drops the whole
+  `hooks` key; used only by `eval/lib/sandbox.sh`, whose copied settings
+  point at the real config dir, so `owned()` would match nothing). The
+  installers shell out to it. Repo-local
+  tooling, never copied to `~/.claude/`, outside the lockstep below.
 - `lib_dirs.sh` — shared config-dir discovery/selection, sourced by both
   scripts. Discovers `~/.claude`, `$CLAUDE_CONFIG_DIR`, sibling
-  `~/.claude-*` dirs, `~/*/.claude*/` dirs one level down that contain both
+  `~/.claude-*`, `~/*/.claude*/` and `~/.profiles/*/` dirs that contain both
   `CLAUDE.md` and `settings.json`, and any `CLAUDE_CONFIG_DIR=` assignment
   in a shell rc file. Repo-local tooling only; never copied to `~/.claude/`,
   so it's not a shipped artifact and sits outside the four-place lockstep
   below.
-- `tests/install_test.sh`, `tests/uninstall_test.sh` — exercise install/
-  uninstall in sandboxed `HOME` dirs. Dev-only, same as `lib_dirs.sh`: never
+- `tests/run.sh` runs `install_test.sh`, `uninstall_test.sh`,
+  `read_guard_test.sh`, `session_boot_test.sh` and `settings_test.sh`
+  (registry event/matcher, prune, the eval-sandbox hook strip, bulk-reader
+  frontmatter). They exercise install/uninstall in sandboxed
+  `HOME` dirs, and drive the guard with fixture `PreToolUse` events (no
+  Claude Code in the loop: stdin is the event, non-empty stdout is a deny). Dev-only, same as `lib_dirs.sh`: never
   copied to `~/.claude/`, outside the four-place lockstep below.
 - `eval/` — reproducible eval harness comparing stock Claude Code against a
   real `install.sh`-seeded claudia install across a fixed task corpus,
@@ -69,6 +100,48 @@ two POSIX shell installers.
   `install.sh` (`mkdir -p` + `link_and_backup`), `uninstall.sh`
   (`remove_and_restore` + any `rmdir`), the README "What it does" list,
   and the inventory above.
+- **A hook is a fifth place: `settings.json` registration.** Linking the
+  file is not installing the hook. `install.sh`'s `register_hooks` and
+  `uninstall.sh`'s `hooks-off` step are the pair, and the inverse must
+  *prune* (drop emptied `hooks` entries, arrays, and the `hooks` key),
+  not just delete a file. Ownership is decided in `lib_settings.py`'s
+  `owned()` against the `HOOKS` registry (basename → `{event, matcher}`)
+  with the command at exactly `<settings_dir>/hooks/` — so a user's own hooks are never rewritten.
+  `hooks-on` strips *that hook's own* prior registration (via `owned()`'s
+  `names` param, scoped to the one basename being registered) before
+  appending — never every claudia hook at once, since `install.sh` calls
+  `hooks-on` once per hook file and a global strip would wipe out a
+  sibling hook registered earlier in the same run. This is what makes
+  re-install idempotent and self-healing after the repo moves (same
+  discipline as the `@import` rewrite). `hooks-off` strips with no
+  `names` filter — every claudia-owned hook, across every event key
+  present in `hooks`, not just `PreToolUse`.
+- **Hook registration is not gated behind the outputStyle prompt.** That
+  prompt is about the voice; the hooks are the payload. Declining the
+  prompt still registers both.
+- **Adding a hook to the `HOOKS` registry is required, not optional.**
+  `lib_settings.py`'s `hooks-on` looks up the command's basename in
+  `HOOKS` and hard-errors (`sys.exit(2)`) on an unknown one — a new hook
+  file with no registry entry fails loudly at install time instead of
+  silently registering with the wrong event/matcher or not at all.
+- **Every hook fails open, always.** Kill switch set, `python3` absent,
+  body crashed, unparseable event, missing/binary/unreadable path,
+  ambiguous shell (pipe, redirect, backtick, `$(`) → allow (or, for
+  `session-boot`, → emit nothing). A hook that can hard-block — or, for
+  `SessionStart`, hard-fail a session — on its own bug costs more than
+  the tokens it saves. Every new rule needs a fail-open path or it
+  doesn't ship.
+- **The `offset`/`limit` exemption is load-bearing, not a convenience.**
+  It is (a) the editing escape hatch for large files and (b) the only
+  thing stopping `bulk-reader`'s own reads from tripping the guard that
+  spawned it — the hook input carries no "is subagent" field, so don't
+  try to detect one. `head -n`/`tail -n` counts are the same exemption on
+  the Bash side. Remove it and `bulk-reader` deadlocks.
+- **Hooks are user-level, so the guard is on in every project.** The only
+  user controls are the `CLAUDIA_READ_GUARD_LINES` threshold (default 350,
+  from the Spotify post, so eval numbers compare like-for-like) and `0`
+  to disable. 350 is a starting point for the eval, not a commitment —
+  Read's own default is 2,000 lines.
 - **Two marker conventions:**
   - `<!-- claudia:start -->` / `<!-- claudia:end -->` fence the
     block — `install.sh` writes/rewrites a single `@<repo>/CLAUDE.md.snippet`

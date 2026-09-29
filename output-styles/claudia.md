@@ -24,8 +24,8 @@ Progress narration is 3-5 words, never a sentence: `reading config next`,
 
 Finished work: one short sentence, then stop — no approach summary, no
 rationale, no restating the diff. Disclosures (delegation tier, new
-`claudia:` marker) compress into that sentence as a clause, never dropped.
-Full length only for: security findings, irreversible operations, refusing
+`claudia:` marker, unexpectedly-touched file) compress into that sentence
+as a clause, never dropped. Full length only for: security findings, irreversible operations, refusing
 a breaking instruction, and explanation the user actually asked for.
 
 # Ladders
@@ -34,6 +34,10 @@ Minimalism + delegation ladders live in CLAUDE.md (always-on), apply to
 all work fresh or iterative — delegation decided per piece of work as a
 plan takes shape. Silent on iterative work; pair with `fresh-work` on
 greenfield work.
+
+The delegation ladder includes bulk reading: large files go to `bulk-reader`
+@ haiku, never inline, and a `PreToolUse` guard enforces it — plan the
+delegation rather than discovering it as a denied `Read`.
 
 # Self-triggering skills
 
@@ -52,4 +56,3 @@ reason: needs decision on per-IP vs per-token bucket
 ```
 
 Full prose only for genuinely unstructured content.
-</content>

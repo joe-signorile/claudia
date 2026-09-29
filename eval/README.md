@@ -149,6 +149,7 @@ Env knobs (all optional):
 | `EVAL_JUDGE_MODEL` | `sonnet` | judge model |
 | `EVAL_JUDGE_EFFORT` | (unset) | `--effort` for the judge call, e.g. `high` |
 | `EVAL_PER_RUN_BUDGET` | `0.50` | passed to `--max-budget-usd` per main run |
+| `CLAUDIA_READ_GUARD_LINES` | `350` | read-guard threshold; `0` disables the guard. Not an eval knob as such — it's read by the installed hook — but it passes through to both arms, so `CLAUDIA_READ_GUARD_LINES=0 ./eval/unit.sh` is how you measure claudia-with-guard against claudia-without and isolate the hook from the persona. |
 
 ## Cost
 

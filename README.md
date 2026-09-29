@@ -15,6 +15,9 @@ Personal tool, one calibrated mode, Claude Code only.
 | `skills/claudia-debt` | harvests `// claudia:` debt markers; on request or unprompted after a new marker. |
 | `skills/doc-router` | splits a bloated `CLAUDE.md` into router + agent reference + human docs; self-triggers on bloat. |
 | `agents/claudia.md` | opt-in subagent: voice + ladders for delegated code-writing. |
+| `agents/bulk-reader.md` | haiku-pinned read-only summarizer: answers questions about large files without pulling them into the main context. |
+| `hooks/read-guard.sh` | `PreToolUse` guard: denies whole-file `Read` (and `cat`/`head`/`tail`/`less`/`more`) past `CLAUDIA_READ_GUARD_LINES` (default 350; `0` off), redirecting to `bulk-reader`. Registered in `settings.json` at install. |
+| `hooks/session-boot.sh` | `SessionStart` hook: injects a short claudia pre-flight reminder (delegation + skill self-triggering) into every new session. `CLAUDIA_SESSION_BOOT=0` disables it. Registered in `settings.json` at install. |
 
 ## Install
 
@@ -42,9 +45,22 @@ once.
 ## Scope
 
 Benchmarked in [eval/](eval/README.md) — self-judged, directional. No
-multi-host adapters, no hooks, no telemetry. Voice reaches the main thread
-and the opt-in `claudia` agent, not arbitrary subagents; the ladders still
-reach code-writing subagents via user-level `CLAUDE.md`.
+multi-host adapters, no telemetry. Voice reaches the main thread and the
+opt-in `claudia` agent, not arbitrary subagents; the ladders still reach
+code-writing subagents via user-level `CLAUDE.md`.
+
+**Scope change:** claudia previously shipped no hooks. It now installs two,
+both registered in `settings.json`, active in every project. The
+`PreToolUse` read guard is real enforcement — the delegation ladder alone
+is guidance the model can decline, the guard is not. The `SessionStart`
+hook is not: it injects a short pre-flight reminder at the start of every
+session so the ladder/skill-triggering norms stay fresh and prominent
+independent of where they land in `CLAUDE.md`, but it can't force a
+delegation decision — no hook can, short of something byte-checkable like
+the read guard's line count. Both fail open on anything they can't
+evaluate; `CLAUDIA_READ_GUARD_LINES=0` and `CLAUDIA_SESSION_BOOT=0` turn
+each off independently. `./uninstall.sh` strips both registrations and
+leaves any hooks claudia didn't install alone.
 
 Repo work: start at [agents.md](agents.md).
 
